@@ -7,7 +7,7 @@
 </script>
 
 <ul>
-{#each variables as variable (variable.name)}
-        <VariableListItem {...variable} />
+{#each variables as variable, index (variable.name)}
+        <VariableListItem {...variable} {index} on:change />
 {/each}
 </ul>

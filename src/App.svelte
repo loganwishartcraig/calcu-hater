@@ -14,11 +14,19 @@
 		variables = [...variables, {name, value: ''}];
 	};
 
+	const handleChangeVariable = ({detail: {index, value}}) => {
+		console.log('evt: handleChangeVariable', {index, value})
+		variables = [
+			...variables.slice(0, index),
+			{...variables[index], value},
+			...variables.slice(index + 1)
+		];
+	};
+
 </script>
 
 <p>Test</p>
 
-<MathInput bind:value={inputVal} />
 <MathParser bind:value={inputVal} let:parsed >
 
 	<div>
@@ -26,9 +34,10 @@
 	</div>
 
 </MathParser>
+<MathInput bind:value={inputVal} />
 
 <p>Define Variable</p>
 <VariableAddForm on:submit={handleAddVariable} />
 
 <p>Variables:</p>
-<VariableList {variables} />
+<VariableList {variables} on:change={handleChangeVariable} />
