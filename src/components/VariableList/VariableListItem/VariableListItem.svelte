@@ -14,12 +14,6 @@
 
     $: tex = `${name} := `;
 
-    const dispatch = createEventDispatcher();
-
-    function handleChange(evt) {
-        dispatch('change', { index, value });
-    }
-
 </script>
 
 
