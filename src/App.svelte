@@ -47,4 +47,5 @@
 
 	<button on:click={solve} type="button">Solve</button>
 
+
 </MathParser>
