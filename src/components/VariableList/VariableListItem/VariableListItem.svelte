@@ -3,24 +3,23 @@
 	import { createEventDispatcher } from 'svelte';
     import MathTexRenderer from '../../MathTexRenderer/MathTexRenderer.svelte';
 
-    export let index;
     export let name
-    export let value
+    export let value = ''
 
     const dispatch = createEventDispatcher();
 
     function handleChange(evt) {
-        dispatch('change', { index, value });
+        dispatch('change', { name, value });
     }
 
-    $: parsed = `${name} := `;
+    $: tex = `${name} := `;
 
 </script>
 
 
 <li>
     <label>
-        <MathTexRenderer {parsed} />
+        <MathTexRenderer {tex} />
         <input type="text" bind:value on:change={handleChange} />
     </label>
 </li>

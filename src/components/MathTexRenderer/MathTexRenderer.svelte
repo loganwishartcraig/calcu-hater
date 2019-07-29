@@ -2,13 +2,13 @@
 
     import katex from 'katex';
 
-    export let parsed;
+    export let tex;
 
-    $: rendered = katex.renderToString(parsed);
+    $: rendered = katex.renderToString(tex);
 
 </script>
 
-{#if rendered && parsed !== 'undefined'}
+{#if rendered && tex !== 'undefined'}
     <span>{@html rendered}</span>
 {:else}
     <span>Waiting...</span>

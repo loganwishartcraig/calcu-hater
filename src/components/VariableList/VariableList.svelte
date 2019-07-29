@@ -2,12 +2,12 @@
 
     import VariableListItem from './VariableListItem/VariableListItem.svelte';
 
-    export let variables = [];
+    export let variables = {};
 
 </script>
 
 <ul>
-{#each variables as variable, index (variable.name)}
-        <VariableListItem {...variable} {index} on:change />
+{#each Object.entries(variables) as [name, value] (name)}
+        <VariableListItem {name} {value} on:change />
 {/each}
 </ul>
