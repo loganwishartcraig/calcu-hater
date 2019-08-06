@@ -3,6 +3,7 @@
 	import MathInput from './components/MathInput/MathInput.svelte';
 	import MathParser from './components/MathParser/MathParser.svelte';
 	import MathTexRenderer from './components/MathTexRenderer/MathTexRenderer.svelte';
+	import MathButtonPanel from './components/MathButtonPanel/MathButtonPanel.svelte';
 	import VariableList from './components/VariableList/VariableList.svelte';
 	import VariableAddForm from './components/VariableAddForm/VariableAddForm.svelte';
 
@@ -47,4 +48,5 @@
 
 	<button on:click={solve} type="button">Solve</button>
 
+<MathButtonPanel />
 </MathParser>
