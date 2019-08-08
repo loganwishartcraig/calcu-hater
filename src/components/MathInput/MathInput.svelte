@@ -1,5 +1,7 @@
 <script>
-	export let value;
+
+	import {mathInput} from '../../stores';
+
 </script>
 
-<input type="text" bind:value={value}>
+<input type="text" bind:value={$mathInput}>

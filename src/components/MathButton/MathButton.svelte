@@ -4,6 +4,9 @@
     import MathTexRenderer from '../MathTexRenderer/MathTexRenderer.svelte'
 
     export let tex;
+    export let transform = (...args) => args
+
+
 
 </script>
 
