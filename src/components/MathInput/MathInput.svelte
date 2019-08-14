@@ -11,7 +11,7 @@
 	}
 
 	function handleBlur() {
-		mathInputStore.resetSelection();
+		// mathInputStore.resetSelection();
 	}
 
 </script>

@@ -71,12 +71,12 @@ const mathInputStore = {
         update(state => {
 
             const prefix = state.value.slice(0, state.selectionRangeStart);
-            const selected = state.value.slice(state.selectionRangeStart, state.selectionRangeEnd);
+            const selection = state.value.slice(state.selectionRangeStart, state.selectionRangeEnd);
             const suffix = state.value.slice(state.selectionRangeEnd);
 
-            console.log('Got partials', { prefix, selected, suffix });
+            console.log('Got partials', { prefix, selection, suffix });
 
-            const toReplace = transform({ prefix, selected, suffix });
+            const toReplace = transform({ prefix, selection, suffix });
 
             console.log('got replace', toReplace);
 
@@ -86,12 +86,13 @@ const mathInputStore = {
             }
 
             const newValue = `${prefix}${toReplace}${suffix}`;
+            const newCursorPos = prefix.length + toReplace.length;
 
             return {
                 ...state,
                 value: newValue,
-                selectionRangeStart: newValue.length,
-                selectionRangeEnd: newValue.length,
+                selectionRangeStart: newCursorPos,
+                selectionRangeEnd: newCursorPos,
             };
 
         })

@@ -29,7 +29,10 @@
 	<p>Variables:</p>
 	<VariableList variables={scope} on:change={({detail}) => {setVariable(detail)}} />
 
+	<div>
+		<MathButtonPanel />
+	</div>
+
 	<button on:click={solve} type="button">Solve</button>
 
-<MathButtonPanel />
 </MathParser>

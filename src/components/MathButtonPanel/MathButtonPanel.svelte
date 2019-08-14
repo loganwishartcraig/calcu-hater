@@ -19,6 +19,8 @@
 <MathButton tex={'.'} transformer={CALC_TRANSFORM[CALC_OPERATION.DECIMAL]}  />
 <MathButton tex={'\\pi'}  transformer={CALC_TRANSFORM[CALC_OPERATION.PI]}/>
 <MathButton tex={'e'}   transformer={CALC_TRANSFORM[CALC_OPERATION.E]}/>
+<MathButton tex={'('}   transformer={CALC_TRANSFORM[CALC_OPERATION.OPEN_PAREN]}/>
+<MathButton tex={')'}   transformer={CALC_TRANSFORM[CALC_OPERATION.CLOSE_PAREN]}/>
 <MathButton tex={'*10^y'}   transformer={CALC_TRANSFORM[CALC_OPERATION.RAISE_TEN]}/>
 <MathButton tex={'mod'}   transformer={CALC_TRANSFORM[CALC_OPERATION.MOD]}/>
 <MathButton tex={ '/'}  transformer={CALC_TRANSFORM[CALC_OPERATION.DIVIDE]}/>

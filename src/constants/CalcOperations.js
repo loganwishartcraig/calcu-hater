@@ -12,6 +12,8 @@ const CALC_OPERATION = {
     DECIMAL: 'DECIMAL',
     PI: 'PI',
     E: 'E',
+    OPEN_PAREN: 'OPEN_PAREN',
+    CLOSE_PAREN: 'CLOSE_PAREN',
     RAISE_TEN: 'RAISE_TEN',
     MOD: 'MOD',
     DIVIDE: 'DIVIDE',
