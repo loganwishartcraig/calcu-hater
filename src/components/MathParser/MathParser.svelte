@@ -1,7 +1,7 @@
 <script>
 
     import {parse} from 'mathjs';
-    import {mathInput} from '../../stores';
+    import mathInputStore from '../../stores';
 
     let parsed;
     let tex;
@@ -30,7 +30,7 @@
     }
 
     $: try {
-        parsed = parse($mathInput || '')
+        parsed = parse($mathInputStore.value || '')
         tex = parsed.toTex({parenthesis: 'keep'});
     } catch(e) {
         console.error(e);

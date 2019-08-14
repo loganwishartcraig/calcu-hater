@@ -1,7 +1,102 @@
 import { writable } from 'svelte/store';
 
-export const mathInput = writable('');
+const initialState = {
+    value: '',
+    selectionRangeStart: 0,
+    selectionRangeEnd: 0,
+};
 
-export const { set, subscribe, update } = writable({
+const { set, subscribe, update } = writable(initialState);
 
-});
+const mathInputStore = {
+
+    subscribe,
+
+    setSelection(selectionRangeStart, selectionRangeEnd) {
+        update(state => ({
+            ...state,
+            selectionRangeStart,
+            selectionRangeEnd,
+        }));
+    },
+
+    resetSelection() {
+        update(state => ({
+            ...state,
+            selectionRangeStart: state.value.length,
+            selectionRangeEnd: state.value.length,
+        }));
+    },
+
+    setValue(value, selectionRangeStart, selectionRangeEnd) {
+        update(state => ({
+            ...state,
+            value,
+            selectionRangeStart,
+            selectionRangeEnd,
+        }));
+    },
+
+    applyTransform(transform) {
+
+        if (typeof transform !== 'function') {
+            return log.error('Cannot apply non-function transform', { transform });
+        }
+
+        update(state => {
+
+            const newValue = transform(state);
+
+            if (typeof newValue !== 'string') {
+                log.error('Cannot update value to non-string', { transform, newValue });
+                return state;
+            }
+
+            return {
+                ...state,
+                value: newValue,
+                selectionRangeStart: newValue.length,
+                selectionRangeEnd: newValue.length,
+            };
+
+        })
+    },
+
+    updateSelection(transform) {
+
+        if (typeof transform !== 'function') {
+            throw new Error('Cannot apply non-function transform');
+        }
+
+        update(state => {
+
+            const prefix = state.value.slice(0, state.selectionRangeStart);
+            const selected = state.value.slice(state.selectionRangeStart, state.selectionRangeEnd);
+            const suffix = state.value.slice(state.selectionRangeEnd);
+
+            console.log('Got partials', { prefix, selected, suffix });
+
+            const toReplace = transform({ prefix, selected, suffix });
+
+            console.log('got replace', toReplace);
+
+            if (typeof toReplace !== 'string') {
+                console.error('Cannot apply non-function transform')
+                return state;
+            }
+
+            const newValue = `${prefix}${toReplace}${suffix}`;
+
+            return {
+                ...state,
+                value: newValue,
+                selectionRangeStart: newValue.length,
+                selectionRangeEnd: newValue.length,
+            };
+
+        })
+
+    }
+};
+
+export default mathInputStore;
