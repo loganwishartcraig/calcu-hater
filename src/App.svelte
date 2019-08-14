@@ -24,6 +24,7 @@
 	<MathInput />
 
 	<p>Define Variable</p>
+
 	<VariableAddForm on:submit={({detail}) => {setVariable(detail)}} />
 
 	<p>Variables:</p>

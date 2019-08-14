@@ -80274,10 +80274,10 @@ var app = (function () {
     			button.textContent = "Solve";
     			add_location(div0, file$6, 19, 1, 623);
     			add_location(p0, file$6, 25, 1, 683);
-    			add_location(p1, file$6, 28, 1, 777);
-    			add_location(div1, file$6, 31, 1, 881);
+    			add_location(p1, file$6, 29, 1, 778);
+    			add_location(div1, file$6, 32, 1, 882);
     			attr(button, "type", "button");
-    			add_location(button, file$6, 35, 1, 919);
+    			add_location(button, file$6, 36, 1, 920);
     			dispose = listen(button, "click", ctx.solve);
     		},
 
