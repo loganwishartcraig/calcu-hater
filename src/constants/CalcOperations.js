@@ -38,6 +38,7 @@ const CALC_OPERATION = {
     LG: 'LG',
     LOG_BASE_A: 'LOG_BASE_A',
     I: 'I',
+    CLEAR: 'CLEAR',
 }
 
 export default CALC_OPERATION;

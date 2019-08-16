@@ -5,21 +5,21 @@
     import mathInputStore from '../../stores';
 
     export let tex;
-    export let transformer;
+    // export let transformer;
 
-    function handleClick() {
+    // function handleClick() {
 
-        if (typeof transformer !== 'function') {
-            throw new Error(`Unable to handle ${tex} button click, no valid transformer provided.`);
-        }
+    //     if (typeof transformer !== 'function') {
+    //         throw new Error(`Unable to handle ${tex} button click, no valid transformer provided.`);
+    //     }
 
-        mathInputStore.updateSelection(transformer);
+    //     mathInputStore.updateSelection(transformer);
 
-    }
+    // }
 
 
 </script>
 
-<GenericButton on:click={handleClick}>
+<GenericButton on:click>
     <MathTexRenderer {tex} />
 </GenericButton>

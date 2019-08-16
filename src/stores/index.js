@@ -37,6 +37,10 @@ const mathInputStore = {
         }));
     },
 
+    clear() {
+        set({ ...initialState });
+    },
+
     applyTransform(transform) {
 
         if (typeof transform !== 'function') {
