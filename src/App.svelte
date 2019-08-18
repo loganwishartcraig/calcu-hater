@@ -6,6 +6,9 @@
 	import MathButtonPanel from './components/MathButtonPanel/MathButtonPanel.svelte';
 	import VariableList from './components/VariableList/VariableList.svelte';
 	import VariableAddForm from './components/VariableAddForm/VariableAddForm.svelte';
+	import ChaosController from './components/ChaosController/ChaosController.svelte';
+
+	console.log('chaos controller', ChaosController)
 
 	const handleSolveClick = () => {
 		console.warn('solving!');
@@ -35,5 +38,17 @@
 	</div>
 
 	<button on:click={solve} type="button">Solve</button>
+
+	<ChaosController let:createChaos>
+		<button on:click={() => {
+			createChaos()
+			.then(chaosPayload => {
+				console.log('chaosPayload', chaosPayload)
+			})
+			.catch(
+				e => console.error('Failed to create chaos', e)
+			);
+		}}>Create Chaos</button>
+	</ChaosController>
 
 </MathParser>

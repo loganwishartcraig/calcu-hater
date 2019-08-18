@@ -1,7 +1,7 @@
 <script>
 
 	import { createEventDispatcher } from 'svelte';
-    import MathTexRenderer from '../../MathTexRendejrer/MathTexRenderer.svelte';
+    import MathTexRenderer from '../../MathTexRenderer/MathTexRenderer.svelte';
     import {mathVariableStore} from '../../../stores'
 
     export let name

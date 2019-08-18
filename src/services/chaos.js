@@ -2,41 +2,53 @@ import globalRandomInsultService from './randomInsult';
 import globalRandomLinkService from './randomLink';
 
 export const ChaosType = {
-    INSULT: 'INSULT',
-    OPEN_PAGE: 'OPEN_PAGE',
+    INSULT: 'CHAOS::INSULT',
+    OPEN_LINK: 'CHAOS::OPEN_LINK',
 }
 
 const defaultWeights = {
     [ChaosType.INSULT]: 0.8,
-    [ChaosType.OPEN_PAGE]: 0.2,
+    [ChaosType.OPEN_LINK]: 0.2,
 };
 
 export class ChaosService {
 
-    constructor(config) {
+    constructor({
+        randomInsultService,
+        randomLinkService,
+        weights = { ...defaultWeights },
+    }) {
 
-        this._randomInsultService = config.randomInsultService;
-        this._randomLinkService = config.randomLinkService;
+        this._randomInsultService = randomInsultService;
+        this._randomLinkService = randomLinkService;
 
-        const sum = Object.values(config.weights).reduce((sum, w) => sum + w, 0);
+        const sum = Object.values(weights).reduce((sum, w) => sum + w, 0);
 
         if (sum !== 1) {
             this._weights = { ...defaultWeights };
-            console.error('[ChaosService] - constructor() - Weights assigned in config must sum to 1', {})
+            console.error('[ChaosService] - constructor() - Weights assigned in config must sum to 1', weights);
         } else {
-            this._weights = config.weights;
+            this._weights = weights;
         }
+
+        console.log(this);
 
     }
 
     async get() {
 
         const type = this._getChaosType();
+        let payload;
 
         switch (type) {
             case ChaosType.INSULT:
-            case ChaosType.OPEN_PAGE:
+                payload = await this._randomInsultService.get();
+                return { type, payload };
+            case ChaosType.OPEN_LINK:
+                payload = await this._randomLinkService.get();
+                return { type, payload };
             default:
+                throw new TypeError(`Received unknown chaos type: ${type}`)
 
         }
 
@@ -45,7 +57,7 @@ export class ChaosService {
     _getChaosType() {
 
         const rand = Math.random();
-        const weights = Object.entries(config.weights);
+        const weights = Object.entries(this._weights);
         let sum = 0;
 
         for (const [key, weight] of weights) {

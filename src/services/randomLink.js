@@ -1,3 +1,5 @@
+import LINKS from '../constants/link'
+
 export class RandomLinkService {
 
     constructor() { }
