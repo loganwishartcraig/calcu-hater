@@ -15,7 +15,7 @@
 
 <p>Test</p>
 
-<MathParser let:tex let:scope let:solve let:setVariable >
+<MathParser let:tex let:solve >
 
 	<div>
 		<MathTexRenderer {tex} />
@@ -25,10 +25,10 @@
 
 	<p>Define Variable</p>
 
-	<VariableAddForm on:submit={({detail}) => {setVariable(detail)}} />
+	<VariableAddForm />
 
 	<p>Variables:</p>
-	<VariableList variables={scope} on:change={({detail}) => {setVariable(detail)}} />
+	<VariableList />
 
 	<div>
 		<MathButtonPanel />

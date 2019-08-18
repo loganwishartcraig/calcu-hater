@@ -1,6 +1,6 @@
 <script>
 
-    import mathInputStore from '../../stores';
+    import {mathInputStore} from '../../stores';
     import MathButton from '../MathButton/MathButton.svelte';
     import CALC_OPERATION from '../../constants/CalcOperations.js';
     import CALC_TRANSFORM from '../../transforms/CalcOperations.js';

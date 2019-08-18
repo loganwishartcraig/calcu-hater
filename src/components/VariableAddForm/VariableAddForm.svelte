@@ -1,15 +1,14 @@
 
 <script>
 
-	import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher } from 'svelte';
+    import { mathVariableStore } from '../../stores';
 
     export let value = '';
 
-    const dispatch = createEventDispatcher();
-
     function handleSubmit(evt) {
 
-        dispatch('submit', { name: value });
+        mathVariableStore.addVariable(value);
         value = '';
 
     }

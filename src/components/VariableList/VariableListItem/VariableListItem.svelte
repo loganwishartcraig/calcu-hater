@@ -1,7 +1,8 @@
 <script>
 
 	import { createEventDispatcher } from 'svelte';
-    import MathTexRenderer from '../../MathTexRenderer/MathTexRenderer.svelte';
+    import MathTexRenderer from '../../MathTexRendejrer/MathTexRenderer.svelte';
+    import {mathVariableStore} from '../../../stores'
 
     export let name
     export let value = ''
@@ -9,7 +10,13 @@
     const dispatch = createEventDispatcher();
 
     function handleChange(evt) {
-        dispatch('change', { name, value });
+
+        const parsed = parseFloat(value);
+
+        if (!isNaN(parsed)) {
+            mathVariableStore.setVariable(name, value);
+        }
+
     }
 
     $: tex = `${name} := `;

@@ -1,13 +1,12 @@
 <script>
 
-    import VariableListItem from './VariableListItem/VariableListItem.svelte';
-
-    export let variables = {};
+    import VariableListItem from './VariableListItem/VariableListItem.svelte'
+    import {mathVariableStore} from '../../stores'
 
 </script>
 
 <ul>
-{#each Object.entries(variables) as [name, value] (name)}
-        <VariableListItem {name} {value} on:change />
+{#each Object.entries($mathVariableStore) as [name, value] (name)}
+        <VariableListItem {name} {value} />
 {/each}
 </ul>
