@@ -1,3 +1,4 @@
+
 const INSULTS = [
     'Are you... are you joking? Too easy.',
     'Haha, unbelievable. You need help with that?',
@@ -7,16 +8,6 @@ const INSULTS = [
     'Somebody could use a math lesson...',
     'Brb, laughing at you.',
     '*rolling eyes emoji*'
-]
+];
 
-export class InsultService {
-
-    constructor() { }
-
-    async getRandom() {
-        // >>> does quicker Math.floor
-        const insultIndex = Math.random() * INSULTS.length >>> 0;
-        return INSULTS[insultIndex];
-    }
-
-}
+export default INSULTS;
