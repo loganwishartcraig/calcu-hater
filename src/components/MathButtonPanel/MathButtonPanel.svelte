@@ -1,13 +1,31 @@
 <script>
 
-    import {mathInputStore} from '../../stores';
+    import {mathInputStore, mathExpressionStore, mathVariableStore, mathSolutionStore} from '../../stores';
+    import {insultStore} from '../../stores';
+    import {globalChaosService, ChaosType} from '../../services';
     import MathButton from '../MathButton/MathButton.svelte';
     import CALC_OPERATION from '../../constants/CalcOperations.js';
     import CALC_TRANSFORM from '../../transforms/CalcOperations.js';
 
-    function handleSolveClick() {
-        console.log('clicked solve');
+    function handleSolveClick()  {
+        globalChaosService.get()
+            .then(({type, payload}) => {
+                switch (type) {
+                    case ChaosType.INSULT:
+                        return insultStore.set(payload);
+                    case ChaosType.OPEN_LINK:
+                        return window.open(payload, '_blank');
+                    default:
+                        console.error('Unknown chaos type')
+                }
+            })
+            .then(() => {
+                console.warn('expression', $mathExpressionStore.parsed, $mathVariableStore);
+                mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore);
+            })
+            .catch(e => console.error('Error creating chaos...', {e}))
     }
+
 
     function handleClearClick() {
         mathInputStore.clear();

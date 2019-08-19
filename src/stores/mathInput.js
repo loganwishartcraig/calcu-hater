@@ -11,6 +11,8 @@ const { set, subscribe, update } = writable(initialState);
 export const mathInputStore = {
 
     subscribe,
+    set,
+    update,
 
     setSelection(selectionRangeStart, selectionRangeEnd) {
         update(state => ({
@@ -55,6 +57,8 @@ export const mathInputStore = {
                 log.error('Cannot update value to non-string', { transform, newValue });
                 return state;
             }
+
+            console.log(set);
 
             return {
                 ...state,

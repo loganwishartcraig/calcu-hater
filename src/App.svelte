@@ -1,14 +1,15 @@
 <script>
 
+	import { mathExpressionStore } from './stores';
 	import MathInput from './components/MathInput/MathInput.svelte';
 	import MathParser from './components/MathParser/MathParser.svelte';
 	import MathTexRenderer from './components/MathTexRenderer/MathTexRenderer.svelte';
 	import MathButtonPanel from './components/MathButtonPanel/MathButtonPanel.svelte';
 	import VariableList from './components/VariableList/VariableList.svelte';
 	import VariableAddForm from './components/VariableAddForm/VariableAddForm.svelte';
-	import ChaosController from './components/ChaosController/ChaosController.svelte';
-
-	console.log('chaos controller', ChaosController)
+	import ChaosSolver from './components/ChaosSolver/ChaosSolver.svelte';
+	import InsultDisplay from './components/InsultDisplay/InsultDisplay.svelte';
+	import SolutionDisplay from './components/SolutionDisplay/SolutionDisplay.svelte';
 
 	const handleSolveClick = () => {
 		console.warn('solving!');
@@ -18,10 +19,10 @@
 
 <p>Test</p>
 
-<MathParser let:tex let:solve >
+<!-- <MathParser let:tex let:solve > -->
 
 	<div>
-		<MathTexRenderer {tex} />
+		<MathTexRenderer tex={$mathExpressionStore.tex} />
 	</div>
 
 	<MathInput />
@@ -37,18 +38,15 @@
 		<MathButtonPanel />
 	</div>
 
-	<button on:click={solve} type="button">Solve</button>
+	<ChaosSolver let:createChaos>
 
-	<ChaosController let:createChaos>
-		<button on:click={() => {
-			createChaos()
-			.then(chaosPayload => {
-				console.log('chaosPayload', chaosPayload)
-			})
-			.catch(
-				e => console.error('Failed to create chaos', e)
-			);
-		}}>Create Chaos</button>
-	</ChaosController>
+	</ChaosSolver>
 
-</MathParser>
+	<div>
+		<InsultDisplay />
+	</div>
+
+	<div>
+		<SolutionDisplay />
+	</div>
+<!-- </MathParser> -->

@@ -14,7 +14,7 @@
         const parsed = parseFloat(value);
 
         if (!isNaN(parsed)) {
-            mathVariableStore.setVariable(name, value);
+            mathVariableStore.setVariable(name, parsed);
         }
 
     }

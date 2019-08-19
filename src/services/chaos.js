@@ -31,8 +31,6 @@ export class ChaosService {
             this._weights = weights;
         }
 
-        console.log(this);
-
     }
 
     async get() {
@@ -64,7 +62,6 @@ export class ChaosService {
             sum += weight;
             if (sum >= rand) return key;
         }
-
 
     }
 
