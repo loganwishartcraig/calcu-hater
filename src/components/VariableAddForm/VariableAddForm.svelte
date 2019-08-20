@@ -16,6 +16,6 @@
 </script>
 
 <form on:submit|preventDefault={handleSubmit} class="flex max-w-full">
-    <input bind:value type="text" maxlength="1" class="flex-grow min-w-0 p-2"/>
+    <input bind:value type="text" maxlength="1" class="flex-grow min-w-0 px-2 py-1 mr-1"/>
     <button type="submit" disabled={!value} class="px-2">+</button>
 </form>

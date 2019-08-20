@@ -659,9 +659,12 @@ var app = (function () {
         subscribe: subscribe$2,
 
         add(name) {
+
+            console.warn('adding', { name });
+
             update$2(state => ({
                 ...state,
-                [name]: undefined
+                [name]: ''
             }));
         },
 
@@ -61466,7 +61469,7 @@ var app = (function () {
     			input = element("input");
     			attr(input, "type", "text");
     			input.value = input_value_value = ctx.$mathInputStore.value;
-    			attr(input, "class", "border-gray-400 p-2 w-full");
+    			attr(input, "class", "border-gray-400 focus:border-blue-400 p-2 w-full");
     			add_location(input, file, 14, 0, 331);
 
     			dispose = [
@@ -79657,13 +79660,19 @@ var app = (function () {
     			input = element("input");
     			t1 = space();
     			button = element("button");
-    			button.textContent = "X";
+    			button.textContent = "x";
+    			attr(label, "for", ctx.inputId);
+    			attr(label, "class", "whitespace-no-wrap mr-1");
+    			add_location(label, file$4, 29, 4, 571);
+    			attr(input, "id", ctx.inputId);
     			attr(input, "type", "text");
-    			add_location(input, file$4, 30, 8, 552);
-    			add_location(label, file$4, 28, 4, 502);
+    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
+    			add_location(input, file$4, 32, 4, 677);
     			attr(button, "type", "button");
-    			add_location(button, file$4, 32, 4, 627);
-    			add_location(li, file$4, 27, 0, 493);
+    			attr(button, "class", "px-2 py-1");
+    			add_location(button, file$4, 33, 4, 793);
+    			attr(li, "class", "flex max-w-full items-center");
+    			add_location(li, file$4, 28, 0, 525);
 
     			dispose = [
     				listen(input, "input", ctx.input_input_handler),
@@ -79680,8 +79689,8 @@ var app = (function () {
     			insert(target, li, anchor);
     			append(li, label);
     			mount_component(mathtexrenderer, label, null);
-    			append(label, t0);
-    			append(label, input);
+    			append(li, t0);
+    			append(li, input);
 
     			input.value = ctx.value;
 
@@ -79695,7 +79704,15 @@ var app = (function () {
     			if (changed.tex) mathtexrenderer_changes.tex = ctx.tex;
     			mathtexrenderer.$set(mathtexrenderer_changes);
 
+    			if (!current || changed.inputId) {
+    				attr(label, "for", ctx.inputId);
+    			}
+
     			if (changed.value && (input.value !== ctx.value)) input.value = ctx.value;
+
+    			if (!current || changed.inputId) {
+    				attr(input, "id", ctx.inputId);
+    			}
     		},
 
     		i: function intro(local) {
@@ -79756,10 +79773,11 @@ var app = (function () {
     		if ('value' in $$props) $$invalidate('value', value = $$props.value);
     	};
 
-    	let tex;
+    	let tex, inputId;
 
     	$$self.$$.update = ($$dirty = { name: 1 }) => {
     		if ($$dirty.name) { $$invalidate('tex', tex = `${name} := `); }
+    		if ($$dirty.name) { $$invalidate('inputId', inputId = `var_${name}`); }
     	};
 
     	return {
@@ -79768,6 +79786,7 @@ var app = (function () {
     		handleChange,
     		handleClearClick,
     		tex,
+    		inputId,
     		input_input_handler
     	};
     }
@@ -79963,12 +79982,12 @@ var app = (function () {
     			t1 = text("+");
     			attr(input, "type", "text");
     			attr(input, "maxlength", "1");
-    			attr(input, "class", "flex-grow min-w-0 p-2");
+    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
     			add_location(input, file$6, 18, 4, 332);
     			attr(button, "type", "submit");
     			button.disabled = button_disabled_value = !ctx.value;
     			attr(button, "class", "px-2");
-    			add_location(button, file$6, 19, 4, 412);
+    			add_location(button, file$6, 19, 4, 423);
     			attr(form, "class", "flex max-w-full");
     			add_location(form, file$6, 17, 0, 257);
 

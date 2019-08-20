@@ -9,9 +9,12 @@ export const mathVariableStore = {
     subscribe,
 
     add(name) {
+
+        console.warn('adding', { name });
+
         update(state => ({
             ...state,
-            [name]: undefined
+            [name]: ''
         }));
     },
 

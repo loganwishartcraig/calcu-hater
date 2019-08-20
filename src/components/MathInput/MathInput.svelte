@@ -12,4 +12,4 @@
 
 </script>
 
-<input type="text" value={$mathInputStore.value} on:keyup={handleKeyUp} on:mouseup={handleMouseUp} class="border-gray-400 p-2 w-full">
+<input type="text" value={$mathInputStore.value} on:keyup={handleKeyUp} on:mouseup={handleMouseUp} class="border-gray-400 focus:border-blue-400 p-2 w-full">
