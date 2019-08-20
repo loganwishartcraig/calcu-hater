@@ -78268,22 +78268,28 @@ var app = (function () {
 
     const file$1 = "src/components/MathTexRenderer/MathTexRenderer.svelte";
 
-    // (13:0) {:else}
+    // (14:0) {:else}
     function create_else_block(ctx) {
-    	var span;
+    	var span, t;
 
     	return {
     		c: function create() {
     			span = element("span");
-    			span.textContent = "Waiting...";
-    			add_location(span, file$1, 13, 4, 204);
+    			t = text("Waiting...");
+    			attr(span, "class", ctx.className);
+    			add_location(span, file$1, 14, 4, 253);
     		},
 
     		m: function mount(target, anchor) {
     			insert(target, span, anchor);
+    			append(span, t);
     		},
 
-    		p: noop,
+    		p: function update(changed, ctx) {
+    			if (changed.className) {
+    				attr(span, "class", ctx.className);
+    			}
+    		},
 
     		d: function destroy(detaching) {
     			if (detaching) {
@@ -78293,14 +78299,15 @@ var app = (function () {
     	};
     }
 
-    // (11:0) {#if rendered && tex !== 'undefined'}
+    // (12:0) {#if rendered && tex !== 'undefined'}
     function create_if_block(ctx) {
     	var span;
 
     	return {
     		c: function create() {
     			span = element("span");
-    			add_location(span, file$1, 11, 4, 162);
+    			attr(span, "class", ctx.className);
+    			add_location(span, file$1, 12, 4, 193);
     		},
 
     		m: function mount(target, anchor) {
@@ -78311,6 +78318,10 @@ var app = (function () {
     		p: function update(changed, ctx) {
     			if (changed.rendered) {
     				span.innerHTML = ctx.rendered;
+    			}
+
+    			if (changed.className) {
+    				attr(span, "class", ctx.className);
     			}
     		},
 
@@ -78375,15 +78386,16 @@ var app = (function () {
     }
 
     function instance$1($$self, $$props, $$invalidate) {
-    	let { tex } = $$props;
+    	let { tex, className = '' } = $$props;
 
-    	const writable_props = ['tex'];
+    	const writable_props = ['tex', 'className'];
     	Object.keys($$props).forEach(key => {
     		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<MathTexRenderer> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$set = $$props => {
     		if ('tex' in $$props) $$invalidate('tex', tex = $$props.tex);
+    		if ('className' in $$props) $$invalidate('className', className = $$props.className);
     	};
 
     	let rendered;
@@ -78392,13 +78404,13 @@ var app = (function () {
     		if ($$dirty.tex) { $$invalidate('rendered', rendered = katex$1.renderToString(tex)); }
     	};
 
-    	return { tex, rendered };
+    	return { tex, className, rendered };
     }
 
     class MathTexRenderer extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, ["tex"]);
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, ["tex", "className"]);
 
     		const { ctx } = this.$$;
     		const props = options.props || {};
@@ -78412,6 +78424,14 @@ var app = (function () {
     	}
 
     	set tex(value) {
+    		throw new Error("<MathTexRenderer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	get className() {
+    		throw new Error("<MathTexRenderer>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set className(value) {
     		throw new Error("<MathTexRenderer>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
@@ -80158,7 +80178,7 @@ var app = (function () {
     	var variablelist = new VariableList({ $$inline: true });
 
     	var mathtexrenderer = new MathTexRenderer({
-    		props: { tex: ctx.$mathExpressionStore.tex },
+    		props: { tex: ctx.$mathExpressionStore.tex, className: "text-5xl" },
     		$$inline: true
     	});
 
@@ -80202,15 +80222,15 @@ var app = (function () {
     			add_location(heading1, file$9, 27, 3, 807);
     			attr(div1, "class", "w-48");
     			add_location(div1, file$9, 24, 2, 724);
-    			attr(div2, "class", "mb-2");
+    			attr(div2, "class", "mb-2 text-center");
     			add_location(div2, file$9, 31, 3, 892);
     			attr(div3, "class", "mb-2");
-    			add_location(div3, file$9, 34, 3, 979);
+    			add_location(div3, file$9, 34, 3, 1012);
     			attr(div4, "class", "flex-1");
     			add_location(div4, file$9, 30, 2, 868);
     			attr(div5, "class", "flex");
     			add_location(div5, file$9, 23, 1, 703);
-    			add_location(div6, file$9, 41, 1, 1068);
+    			add_location(div6, file$9, 41, 1, 1101);
     			attr(main, "class", "container mx-auto");
     			add_location(main, file$9, 14, 0, 627);
     		},

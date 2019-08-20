@@ -29,8 +29,8 @@
 			<VariableList />
 		</div>
 		<div class="flex-1">
-			<div class="mb-2">
-				<MathTexRenderer tex={$mathExpressionStore.tex} />
+			<div class="mb-2 text-center">
+				<MathTexRenderer tex={$mathExpressionStore.tex} className="text-5xl" />
 			</div>
 			<div class="mb-2">
 				<MathInput />

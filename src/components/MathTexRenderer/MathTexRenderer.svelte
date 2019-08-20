@@ -3,13 +3,14 @@
     import katex from 'katex';
 
     export let tex;
+    export let className = '';
 
     $: rendered = katex.renderToString(tex);
 
 </script>
 
 {#if rendered && tex !== 'undefined'}
-    <span>{@html rendered}</span>
+    <span class={className}>{@html rendered}</span>
 {:else}
-    <span>Waiting...</span>
+    <span class={className}>Waiting...</span>
 {/if}
