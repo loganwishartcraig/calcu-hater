@@ -39,10 +39,7 @@
 
 </script>
 
-<style>
 
-
-</style>
 
 <div class="calculator-panel">
 
@@ -50,6 +47,12 @@
         <MathButton tex={'('}   on:click={applyTransform(CALC_OPERATION.OPEN_PAREN)}/>
         <MathButton tex={')'}   on:click={applyTransform(CALC_OPERATION.CLOSE_PAREN)}/>
         <MathButton tex={'(x)'}   on:click={applyTransform(CALC_OPERATION.WRAP_PAREN)}/>
+    </section>
+
+    <section class="variable-panel">
+        <MathButton tex={'x'}  on:click={applyTransform(CALC_OPERATION.X)}/>
+        <MathButton tex={'y'}   on:click={applyTransform(CALC_OPERATION.Y)}/>
+        <MathButton tex={'z'}   on:click={applyTransform(CALC_OPERATION.Z)}/>
     </section>
 
     <section class="constant-panel">

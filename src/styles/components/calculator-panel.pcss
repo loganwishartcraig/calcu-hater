@@ -5,11 +5,18 @@
     grid-template-rows: auto;
     grid-template-areas:
         "trig trig grouper grouper grouper basic"
+        "trig trig variable variable variable basic"
         "advanced advanced constant constant constant basic"
         "advanced advanced numeric numeric numeric basic"
         "advanced advanced numeric numeric numeric basic"
         "advanced advanced numeric numeric numeric basic"
         "advanced advanced numeric numeric numeric basic";
+}
+
+.variable-panel {
+    display: grid;
+    grid-area: variable;
+    grid-template-columns: repeat(3, 1fr);
 }
 
 .constant-panel {

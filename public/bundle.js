@@ -78838,6 +78838,9 @@ var app = (function () {
         DECIMAL: 'DECIMAL',
         PI: 'PI',
         E: 'E',
+        X: 'X',
+        Y: 'Y',
+        Z: 'Z',
         OPEN_PAREN: 'OPEN_PAREN',
         CLOSE_PAREN: 'CLOSE_PAREN',
         RAISE_TEN: 'RAISE_TEN',
@@ -78883,6 +78886,9 @@ var app = (function () {
         [CALC_OPERATION.DECIMAL]: () => `.`,
         [CALC_OPERATION.PI]: () => ' pi ',
         [CALC_OPERATION.E]: () => ' e ',
+        [CALC_OPERATION.X]: () => 'x',
+        [CALC_OPERATION.Y]: () => 'y',
+        [CALC_OPERATION.Z]: () => 'z',
         [CALC_OPERATION.OPEN_PAREN]: () => '(',
         [CALC_OPERATION.CLOSE_PAREN]: () => ')',
         [CALC_OPERATION.RAISE_TEN]: ({ selection }) => `${wrapSelection(selection)} * 10^y`,
@@ -78916,7 +78922,7 @@ var app = (function () {
     const file$3 = "src/components/MathButtonPanel/MathButtonPanel.svelte";
 
     function create_fragment$4(ctx) {
-    	var div, section0, t0, t1, t2, section1, t3, t4, t5, section2, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, section3, t18, t19, t20, t21, t22, t23, t24, section4, t25, t26, t27, t28, t29, t30, section5, t31, t32, t33, t34, t35, t36, t37, t38, t39, current;
+    	var div, section0, t0, t1, t2, section1, t3, t4, t5, section2, t6, t7, t8, section3, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, section4, t21, t22, t23, t24, t25, t26, t27, section5, t28, t29, t30, t31, t32, t33, section6, t34, t35, t36, t37, t38, t39, t40, t41, t42, current;
 
     	var mathbutton0 = new MathButton({
     		props: { tex: '(' },
@@ -78937,232 +78943,250 @@ var app = (function () {
     	mathbutton2.$on("click", applyTransform(CALC_OPERATION.WRAP_PAREN));
 
     	var mathbutton3 = new MathButton({
+    		props: { tex: 'x' },
+    		$$inline: true
+    	});
+    	mathbutton3.$on("click", applyTransform(CALC_OPERATION.X));
+
+    	var mathbutton4 = new MathButton({
+    		props: { tex: 'y' },
+    		$$inline: true
+    	});
+    	mathbutton4.$on("click", applyTransform(CALC_OPERATION.Y));
+
+    	var mathbutton5 = new MathButton({
+    		props: { tex: 'z' },
+    		$$inline: true
+    	});
+    	mathbutton5.$on("click", applyTransform(CALC_OPERATION.Z));
+
+    	var mathbutton6 = new MathButton({
     		props: { tex: '\\pi' },
     		$$inline: true
     	});
-    	mathbutton3.$on("click", applyTransform(CALC_OPERATION.PI));
+    	mathbutton6.$on("click", applyTransform(CALC_OPERATION.PI));
 
-    	var mathbutton4 = new MathButton({
+    	var mathbutton7 = new MathButton({
     		props: { tex: 'e' },
     		$$inline: true
     	});
-    	mathbutton4.$on("click", applyTransform(CALC_OPERATION.E));
+    	mathbutton7.$on("click", applyTransform(CALC_OPERATION.E));
 
-    	var mathbutton5 = new MathButton({
+    	var mathbutton8 = new MathButton({
     		props: { tex: 'i' },
     		$$inline: true
     	});
-    	mathbutton5.$on("click", applyTransform(CALC_OPERATION.I));
+    	mathbutton8.$on("click", applyTransform(CALC_OPERATION.I));
 
-    	var mathbutton6 = new MathButton({
+    	var mathbutton9 = new MathButton({
     		props: { tex: '1' },
     		$$inline: true
     	});
-    	mathbutton6.$on("click", applyTransform(CALC_OPERATION.ONE));
+    	mathbutton9.$on("click", applyTransform(CALC_OPERATION.ONE));
 
-    	var mathbutton7 = new MathButton({
+    	var mathbutton10 = new MathButton({
     		props: { tex: '2' },
     		$$inline: true
     	});
-    	mathbutton7.$on("click", applyTransform(CALC_OPERATION.TWO));
+    	mathbutton10.$on("click", applyTransform(CALC_OPERATION.TWO));
 
-    	var mathbutton8 = new MathButton({
+    	var mathbutton11 = new MathButton({
     		props: { tex: '3' },
     		$$inline: true
     	});
-    	mathbutton8.$on("click", applyTransform(CALC_OPERATION.THREE));
+    	mathbutton11.$on("click", applyTransform(CALC_OPERATION.THREE));
 
-    	var mathbutton9 = new MathButton({
+    	var mathbutton12 = new MathButton({
     		props: { tex: '4' },
     		$$inline: true
     	});
-    	mathbutton9.$on("click", applyTransform(CALC_OPERATION.FOUR));
+    	mathbutton12.$on("click", applyTransform(CALC_OPERATION.FOUR));
 
-    	var mathbutton10 = new MathButton({
+    	var mathbutton13 = new MathButton({
     		props: { tex: '5' },
     		$$inline: true
     	});
-    	mathbutton10.$on("click", applyTransform(CALC_OPERATION.FIVE));
+    	mathbutton13.$on("click", applyTransform(CALC_OPERATION.FIVE));
 
-    	var mathbutton11 = new MathButton({
+    	var mathbutton14 = new MathButton({
     		props: { tex: '6' },
     		$$inline: true
     	});
-    	mathbutton11.$on("click", applyTransform(CALC_OPERATION.SIX));
+    	mathbutton14.$on("click", applyTransform(CALC_OPERATION.SIX));
 
-    	var mathbutton12 = new MathButton({
+    	var mathbutton15 = new MathButton({
     		props: { tex: '7' },
     		$$inline: true
     	});
-    	mathbutton12.$on("click", applyTransform(CALC_OPERATION.SEVEN));
+    	mathbutton15.$on("click", applyTransform(CALC_OPERATION.SEVEN));
 
-    	var mathbutton13 = new MathButton({
+    	var mathbutton16 = new MathButton({
     		props: { tex: '8' },
     		$$inline: true
     	});
-    	mathbutton13.$on("click", applyTransform(CALC_OPERATION.EIGHT));
+    	mathbutton16.$on("click", applyTransform(CALC_OPERATION.EIGHT));
 
-    	var mathbutton14 = new MathButton({
+    	var mathbutton17 = new MathButton({
     		props: { tex: '9' },
     		$$inline: true
     	});
-    	mathbutton14.$on("click", applyTransform(CALC_OPERATION.NINE));
+    	mathbutton17.$on("click", applyTransform(CALC_OPERATION.NINE));
 
-    	var mathbutton15 = new MathButton({
+    	var mathbutton18 = new MathButton({
     		props: { tex: '0' },
     		$$inline: true
     	});
-    	mathbutton15.$on("click", applyTransform(CALC_OPERATION.ZERO));
+    	mathbutton18.$on("click", applyTransform(CALC_OPERATION.ZERO));
 
-    	var mathbutton16 = new MathButton({
+    	var mathbutton19 = new MathButton({
     		props: { tex: '.' },
     		$$inline: true
     	});
-    	mathbutton16.$on("click", applyTransform(CALC_OPERATION.DECIMAL));
+    	mathbutton19.$on("click", applyTransform(CALC_OPERATION.DECIMAL));
 
-    	var mathbutton17 = new MathButton({
+    	var mathbutton20 = new MathButton({
     		props: { tex: '=' },
     		$$inline: true
     	});
-    	mathbutton17.$on("click", ctx.handleSolveClick);
+    	mathbutton20.$on("click", ctx.handleSolveClick);
 
-    	var mathbutton18 = new MathButton({
+    	var mathbutton21 = new MathButton({
     		props: { tex: 'clear' },
     		$$inline: true
     	});
-    	mathbutton18.$on("click", handleClearClick);
+    	mathbutton21.$on("click", handleClearClick);
 
-    	var mathbutton19 = new MathButton({
+    	var mathbutton22 = new MathButton({
     		props: { tex: 'mod' },
     		$$inline: true
     	});
-    	mathbutton19.$on("click", applyTransform(CALC_OPERATION.MOD));
+    	mathbutton22.$on("click", applyTransform(CALC_OPERATION.MOD));
 
-    	var mathbutton20 = new MathButton({
+    	var mathbutton23 = new MathButton({
     		props: { tex: '*10^y' },
     		$$inline: true
     	});
-    	mathbutton20.$on("click", applyTransform(CALC_OPERATION.RAISE_TEN));
+    	mathbutton23.$on("click", applyTransform(CALC_OPERATION.RAISE_TEN));
 
-    	var mathbutton21 = new MathButton({
+    	var mathbutton24 = new MathButton({
     		props: { tex: '/' },
     		$$inline: true
     	});
-    	mathbutton21.$on("click", applyTransform(CALC_OPERATION.DIVIDE));
+    	mathbutton24.$on("click", applyTransform(CALC_OPERATION.DIVIDE));
 
-    	var mathbutton22 = new MathButton({
+    	var mathbutton25 = new MathButton({
     		props: { tex: '*' },
     		$$inline: true
     	});
-    	mathbutton22.$on("click", applyTransform(CALC_OPERATION.MULTIPLY));
+    	mathbutton25.$on("click", applyTransform(CALC_OPERATION.MULTIPLY));
 
-    	var mathbutton23 = new MathButton({
+    	var mathbutton26 = new MathButton({
     		props: { tex: '-' },
     		$$inline: true
     	});
-    	mathbutton23.$on("click", applyTransform(CALC_OPERATION.SUBTRACT));
+    	mathbutton26.$on("click", applyTransform(CALC_OPERATION.SUBTRACT));
 
-    	var mathbutton24 = new MathButton({
+    	var mathbutton27 = new MathButton({
     		props: { tex: '+' },
     		$$inline: true
     	});
-    	mathbutton24.$on("click", applyTransform(CALC_OPERATION.ADD));
+    	mathbutton27.$on("click", applyTransform(CALC_OPERATION.ADD));
 
-    	var mathbutton25 = new MathButton({
+    	var mathbutton28 = new MathButton({
     		props: { tex: 'cos(x)' },
     		$$inline: true
     	});
-    	mathbutton25.$on("click", applyTransform(CALC_OPERATION.COS));
+    	mathbutton28.$on("click", applyTransform(CALC_OPERATION.COS));
 
-    	var mathbutton26 = new MathButton({
+    	var mathbutton29 = new MathButton({
     		props: { tex: 'sin(x)' },
     		$$inline: true
     	});
-    	mathbutton26.$on("click", applyTransform(CALC_OPERATION.SIN));
+    	mathbutton29.$on("click", applyTransform(CALC_OPERATION.SIN));
 
-    	var mathbutton27 = new MathButton({
+    	var mathbutton30 = new MathButton({
     		props: { tex: 'tan(x)' },
     		$$inline: true
     	});
-    	mathbutton27.$on("click", applyTransform(CALC_OPERATION.TAN));
+    	mathbutton30.$on("click", applyTransform(CALC_OPERATION.TAN));
 
-    	var mathbutton28 = new MathButton({
+    	var mathbutton31 = new MathButton({
     		props: { tex: 'sinh(x)' },
     		$$inline: true
     	});
-    	mathbutton28.$on("click", applyTransform(CALC_OPERATION.SINH));
+    	mathbutton31.$on("click", applyTransform(CALC_OPERATION.SINH));
 
-    	var mathbutton29 = new MathButton({
+    	var mathbutton32 = new MathButton({
     		props: { tex: 'cosh(x)' },
     		$$inline: true
     	});
-    	mathbutton29.$on("click", applyTransform(CALC_OPERATION.COSH));
+    	mathbutton32.$on("click", applyTransform(CALC_OPERATION.COSH));
 
-    	var mathbutton30 = new MathButton({
+    	var mathbutton33 = new MathButton({
     		props: { tex: 'tanh(x)' },
     		$$inline: true
     	});
-    	mathbutton30.$on("click", applyTransform(CALC_OPERATION.TANH));
+    	mathbutton33.$on("click", applyTransform(CALC_OPERATION.TANH));
 
-    	var mathbutton31 = new MathButton({
+    	var mathbutton34 = new MathButton({
     		props: { tex: 'x^{-1}' },
     		$$inline: true
     	});
-    	mathbutton31.$on("click", applyTransform(CALC_OPERATION.POWER_NEGATIVE_ONE));
+    	mathbutton34.$on("click", applyTransform(CALC_OPERATION.POWER_NEGATIVE_ONE));
 
-    	var mathbutton32 = new MathButton({
+    	var mathbutton35 = new MathButton({
     		props: { tex: 'x^y' },
     		$$inline: true
     	});
-    	mathbutton32.$on("click", applyTransform(CALC_OPERATION.POWER_Y));
+    	mathbutton35.$on("click", applyTransform(CALC_OPERATION.POWER_Y));
 
-    	var mathbutton33 = new MathButton({
+    	var mathbutton36 = new MathButton({
     		props: { tex: 'x^2' },
     		$$inline: true
     	});
-    	mathbutton33.$on("click", applyTransform(CALC_OPERATION.POWER_TWO));
+    	mathbutton36.$on("click", applyTransform(CALC_OPERATION.POWER_TWO));
 
-    	var mathbutton34 = new MathButton({
+    	var mathbutton37 = new MathButton({
     		props: { tex: '\\sqrt{x}' },
     		$$inline: true
     	});
-    	mathbutton34.$on("click", applyTransform(CALC_OPERATION.SQUARE_ROOT));
+    	mathbutton37.$on("click", applyTransform(CALC_OPERATION.SQUARE_ROOT));
 
-    	var mathbutton35 = new MathButton({
+    	var mathbutton38 = new MathButton({
     		props: { tex: 'x!' },
     		$$inline: true
     	});
-    	mathbutton35.$on("click", applyTransform(CALC_OPERATION.FACTORIAL));
+    	mathbutton38.$on("click", applyTransform(CALC_OPERATION.FACTORIAL));
 
-    	var mathbutton36 = new MathButton({
+    	var mathbutton39 = new MathButton({
     		props: { tex: '|x|' },
     		$$inline: true
     	});
-    	mathbutton36.$on("click", applyTransform(CALC_OPERATION.ABS));
+    	mathbutton39.$on("click", applyTransform(CALC_OPERATION.ABS));
 
-    	var mathbutton37 = new MathButton({
+    	var mathbutton40 = new MathButton({
     		props: { tex: 'log(x)' },
     		$$inline: true
     	});
-    	mathbutton37.$on("click", applyTransform(CALC_OPERATION.LOG));
+    	mathbutton40.$on("click", applyTransform(CALC_OPERATION.LOG));
 
-    	var mathbutton38 = new MathButton({
+    	var mathbutton41 = new MathButton({
     		props: { tex: 'ln(x)' },
     		$$inline: true
     	});
-    	mathbutton38.$on("click", applyTransform(CALC_OPERATION.LN));
+    	mathbutton41.$on("click", applyTransform(CALC_OPERATION.LN));
 
-    	var mathbutton39 = new MathButton({
+    	var mathbutton42 = new MathButton({
     		props: { tex: 'lg(x)' },
     		$$inline: true
     	});
-    	mathbutton39.$on("click", applyTransform(CALC_OPERATION.LG));
+    	mathbutton42.$on("click", applyTransform(CALC_OPERATION.LG));
 
-    	var mathbutton40 = new MathButton({
+    	var mathbutton43 = new MathButton({
     		props: { tex: 'log_a(x)' },
     		$$inline: true
     	});
-    	mathbutton40.$on("click", applyTransform(CALC_OPERATION.LOG_BASE_A));
+    	mathbutton43.$on("click", applyTransform(CALC_OPERATION.LOG_BASE_A));
 
     	return {
     		c: function create() {
@@ -79188,6 +79212,7 @@ var app = (function () {
     			t7 = space();
     			mathbutton8.$$.fragment.c();
     			t8 = space();
+    			section3 = element("section");
     			mathbutton9.$$.fragment.c();
     			t9 = space();
     			mathbutton10.$$.fragment.c();
@@ -79206,13 +79231,13 @@ var app = (function () {
     			t16 = space();
     			mathbutton17.$$.fragment.c();
     			t17 = space();
-    			section3 = element("section");
     			mathbutton18.$$.fragment.c();
     			t18 = space();
     			mathbutton19.$$.fragment.c();
     			t19 = space();
     			mathbutton20.$$.fragment.c();
     			t20 = space();
+    			section4 = element("section");
     			mathbutton21.$$.fragment.c();
     			t21 = space();
     			mathbutton22.$$.fragment.c();
@@ -79221,26 +79246,26 @@ var app = (function () {
     			t23 = space();
     			mathbutton24.$$.fragment.c();
     			t24 = space();
-    			section4 = element("section");
     			mathbutton25.$$.fragment.c();
     			t25 = space();
     			mathbutton26.$$.fragment.c();
     			t26 = space();
     			mathbutton27.$$.fragment.c();
     			t27 = space();
+    			section5 = element("section");
     			mathbutton28.$$.fragment.c();
     			t28 = space();
     			mathbutton29.$$.fragment.c();
     			t29 = space();
     			mathbutton30.$$.fragment.c();
     			t30 = space();
-    			section5 = element("section");
     			mathbutton31.$$.fragment.c();
     			t31 = space();
     			mathbutton32.$$.fragment.c();
     			t32 = space();
     			mathbutton33.$$.fragment.c();
     			t33 = space();
+    			section6 = element("section");
     			mathbutton34.$$.fragment.c();
     			t34 = space();
     			mathbutton35.$$.fragment.c();
@@ -79254,20 +79279,28 @@ var app = (function () {
     			mathbutton39.$$.fragment.c();
     			t39 = space();
     			mathbutton40.$$.fragment.c();
+    			t40 = space();
+    			mathbutton41.$$.fragment.c();
+    			t41 = space();
+    			mathbutton42.$$.fragment.c();
+    			t42 = space();
+    			mathbutton43.$$.fragment.c();
     			attr(section0, "class", "grouper-panel");
-    			add_location(section0, file$3, 48, 4, 1501);
-    			attr(section1, "class", "constant-panel");
-    			add_location(section1, file$3, 54, 4, 1817);
-    			attr(section2, "class", "numeric-panel");
-    			add_location(section2, file$3, 60, 4, 2107);
-    			attr(section3, "class", "basic-ops-panel");
-    			add_location(section3, file$3, 75, 4, 3113);
-    			attr(section4, "class", "trig-panel");
-    			add_location(section4, file$3, 85, 4, 3737);
-    			attr(section5, "class", "advanced-ops-panel");
-    			add_location(section5, file$3, 94, 4, 4302);
+    			add_location(section0, file$3, 45, 4, 1483);
+    			attr(section1, "class", "variable-panel");
+    			add_location(section1, file$3, 51, 4, 1799);
+    			attr(section2, "class", "constant-panel");
+    			add_location(section2, file$3, 57, 4, 2085);
+    			attr(section3, "class", "numeric-panel");
+    			add_location(section3, file$3, 63, 4, 2375);
+    			attr(section4, "class", "basic-ops-panel");
+    			add_location(section4, file$3, 78, 4, 3381);
+    			attr(section5, "class", "trig-panel");
+    			add_location(section5, file$3, 88, 4, 4005);
+    			attr(section6, "class", "advanced-ops-panel");
+    			add_location(section6, file$3, 97, 4, 4570);
     			attr(div, "class", "calculator-panel");
-    			add_location(div, file$3, 46, 0, 1465);
+    			add_location(div, file$3, 43, 0, 1447);
     		},
 
     		l: function claim(nodes) {
@@ -79296,73 +79329,80 @@ var app = (function () {
     			mount_component(mathbutton7, section2, null);
     			append(section2, t7);
     			mount_component(mathbutton8, section2, null);
-    			append(section2, t8);
-    			mount_component(mathbutton9, section2, null);
-    			append(section2, t9);
-    			mount_component(mathbutton10, section2, null);
-    			append(section2, t10);
-    			mount_component(mathbutton11, section2, null);
-    			append(section2, t11);
-    			mount_component(mathbutton12, section2, null);
-    			append(section2, t12);
-    			mount_component(mathbutton13, section2, null);
-    			append(section2, t13);
-    			mount_component(mathbutton14, section2, null);
-    			append(section2, t14);
-    			mount_component(mathbutton15, section2, null);
-    			append(section2, t15);
-    			mount_component(mathbutton16, section2, null);
-    			append(section2, t16);
-    			mount_component(mathbutton17, section2, null);
-    			append(div, t17);
+    			append(div, t8);
     			append(div, section3);
+    			mount_component(mathbutton9, section3, null);
+    			append(section3, t9);
+    			mount_component(mathbutton10, section3, null);
+    			append(section3, t10);
+    			mount_component(mathbutton11, section3, null);
+    			append(section3, t11);
+    			mount_component(mathbutton12, section3, null);
+    			append(section3, t12);
+    			mount_component(mathbutton13, section3, null);
+    			append(section3, t13);
+    			mount_component(mathbutton14, section3, null);
+    			append(section3, t14);
+    			mount_component(mathbutton15, section3, null);
+    			append(section3, t15);
+    			mount_component(mathbutton16, section3, null);
+    			append(section3, t16);
+    			mount_component(mathbutton17, section3, null);
+    			append(section3, t17);
     			mount_component(mathbutton18, section3, null);
     			append(section3, t18);
     			mount_component(mathbutton19, section3, null);
     			append(section3, t19);
     			mount_component(mathbutton20, section3, null);
-    			append(section3, t20);
-    			mount_component(mathbutton21, section3, null);
-    			append(section3, t21);
-    			mount_component(mathbutton22, section3, null);
-    			append(section3, t22);
-    			mount_component(mathbutton23, section3, null);
-    			append(section3, t23);
-    			mount_component(mathbutton24, section3, null);
-    			append(div, t24);
+    			append(div, t20);
     			append(div, section4);
+    			mount_component(mathbutton21, section4, null);
+    			append(section4, t21);
+    			mount_component(mathbutton22, section4, null);
+    			append(section4, t22);
+    			mount_component(mathbutton23, section4, null);
+    			append(section4, t23);
+    			mount_component(mathbutton24, section4, null);
+    			append(section4, t24);
     			mount_component(mathbutton25, section4, null);
     			append(section4, t25);
     			mount_component(mathbutton26, section4, null);
     			append(section4, t26);
     			mount_component(mathbutton27, section4, null);
-    			append(section4, t27);
-    			mount_component(mathbutton28, section4, null);
-    			append(section4, t28);
-    			mount_component(mathbutton29, section4, null);
-    			append(section4, t29);
-    			mount_component(mathbutton30, section4, null);
-    			append(div, t30);
+    			append(div, t27);
     			append(div, section5);
+    			mount_component(mathbutton28, section5, null);
+    			append(section5, t28);
+    			mount_component(mathbutton29, section5, null);
+    			append(section5, t29);
+    			mount_component(mathbutton30, section5, null);
+    			append(section5, t30);
     			mount_component(mathbutton31, section5, null);
     			append(section5, t31);
     			mount_component(mathbutton32, section5, null);
     			append(section5, t32);
     			mount_component(mathbutton33, section5, null);
-    			append(section5, t33);
-    			mount_component(mathbutton34, section5, null);
-    			append(section5, t34);
-    			mount_component(mathbutton35, section5, null);
-    			append(section5, t35);
-    			mount_component(mathbutton36, section5, null);
-    			append(section5, t36);
-    			mount_component(mathbutton37, section5, null);
-    			append(section5, t37);
-    			mount_component(mathbutton38, section5, null);
-    			append(section5, t38);
-    			mount_component(mathbutton39, section5, null);
-    			append(section5, t39);
-    			mount_component(mathbutton40, section5, null);
+    			append(div, t33);
+    			append(div, section6);
+    			mount_component(mathbutton34, section6, null);
+    			append(section6, t34);
+    			mount_component(mathbutton35, section6, null);
+    			append(section6, t35);
+    			mount_component(mathbutton36, section6, null);
+    			append(section6, t36);
+    			mount_component(mathbutton37, section6, null);
+    			append(section6, t37);
+    			mount_component(mathbutton38, section6, null);
+    			append(section6, t38);
+    			mount_component(mathbutton39, section6, null);
+    			append(section6, t39);
+    			mount_component(mathbutton40, section6, null);
+    			append(section6, t40);
+    			mount_component(mathbutton41, section6, null);
+    			append(section6, t41);
+    			mount_component(mathbutton42, section6, null);
+    			append(section6, t42);
+    			mount_component(mathbutton43, section6, null);
     			current = true;
     		},
 
@@ -79452,6 +79492,12 @@ var app = (function () {
 
     			transition_in(mathbutton40.$$.fragment, local);
 
+    			transition_in(mathbutton41.$$.fragment, local);
+
+    			transition_in(mathbutton42.$$.fragment, local);
+
+    			transition_in(mathbutton43.$$.fragment, local);
+
     			current = true;
     		},
 
@@ -79497,6 +79543,9 @@ var app = (function () {
     			transition_out(mathbutton38.$$.fragment, local);
     			transition_out(mathbutton39.$$.fragment, local);
     			transition_out(mathbutton40.$$.fragment, local);
+    			transition_out(mathbutton41.$$.fragment, local);
+    			transition_out(mathbutton42.$$.fragment, local);
+    			transition_out(mathbutton43.$$.fragment, local);
     			current = false;
     		},
 
@@ -79586,6 +79635,12 @@ var app = (function () {
     			destroy_component(mathbutton39);
 
     			destroy_component(mathbutton40);
+
+    			destroy_component(mathbutton41);
+
+    			destroy_component(mathbutton42);
+
+    			destroy_component(mathbutton43);
     		}
     	};
     }
