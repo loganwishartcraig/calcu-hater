@@ -8,14 +8,14 @@ export const mathVariableStore = {
 
     subscribe,
 
-    addVariable(name) {
+    add(name) {
         update(state => ({
             ...state,
             [name]: undefined
         }));
     },
 
-    setVariable(name, value) {
+    set(name, value) {
 
         if (typeof value !== 'number' || isNaN(value)) {
             throw new TypeError(`Cannot use non numeric value ${value} for variable ${name}`);
@@ -28,7 +28,7 @@ export const mathVariableStore = {
 
     },
 
-    removeVariable(name) {
+    remove(name) {
 
         update(state => {
 

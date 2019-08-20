@@ -8,7 +8,7 @@
 
     function handleSubmit(evt) {
 
-        mathVariableStore.addVariable(value);
+        mathVariableStore.add(value);
         value = '';
 
     }
