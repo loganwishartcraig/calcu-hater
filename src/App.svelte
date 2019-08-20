@@ -9,21 +9,17 @@
 	import InsultDisplay from './components/InsultDisplay/InsultDisplay.svelte';
 	import SolutionDisplay from './components/SolutionDisplay/SolutionDisplay.svelte';
 
-	const handleSolveClick = () => {
-		console.warn('solving!');
-	}
-
 </script>
 
 
 <main class="container mx-auto">
 
+
 	<div>
-		<MathTexRenderer tex={$mathExpressionStore.tex} />
+		<SolutionDisplay />
 	</div>
 
 
-	<MathInput />
 
 	<div class="flex">
 		<div class="w-48">
@@ -33,6 +29,12 @@
 			<VariableList />
 		</div>
 		<div class="flex-1">
+			<div class="mb-2">
+				<MathTexRenderer tex={$mathExpressionStore.tex} />
+			</div>
+			<div class="mb-2">
+				<MathInput />
+			</div>
 			<MathButtonPanel />
 		</div>
 	</div>
@@ -41,7 +43,4 @@
 		<InsultDisplay />
 	</div>
 
-	<div>
-		<SolutionDisplay />
-	</div>
 </main>

@@ -12,6 +12,4 @@
 
 </script>
 
-<input type="text" value={$mathInputStore.value} on:keyup={handleKeyUp} on:mouseup={handleMouseUp}>
-<div>Start: {$mathInputStore.selectionRangeStart}</div>
-<div>End: {$mathInputStore.selectionRangeEnd}</div>
+<input type="text" value={$mathInputStore.value} on:keyup={handleKeyUp} on:mouseup={handleMouseUp} class="border-gray-400 p-2 w-full">

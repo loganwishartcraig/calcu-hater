@@ -61459,24 +61459,15 @@ var app = (function () {
     const file = "src/components/MathInput/MathInput.svelte";
 
     function create_fragment(ctx) {
-    	var input, input_value_value, t0, div0, t1, t2_value = ctx.$mathInputStore.selectionRangeStart, t2, t3, div1, t4, t5_value = ctx.$mathInputStore.selectionRangeEnd, t5, dispose;
+    	var input, input_value_value, dispose;
 
     	return {
     		c: function create() {
     			input = element("input");
-    			t0 = space();
-    			div0 = element("div");
-    			t1 = text("Start: ");
-    			t2 = text(t2_value);
-    			t3 = space();
-    			div1 = element("div");
-    			t4 = text("End: ");
-    			t5 = text(t5_value);
     			attr(input, "type", "text");
     			input.value = input_value_value = ctx.$mathInputStore.value;
+    			attr(input, "class", "border-gray-400 p-2 w-full");
     			add_location(input, file, 14, 0, 331);
-    			add_location(div0, file, 15, 0, 431);
-    			add_location(div1, file, 16, 0, 487);
 
     			dispose = [
     				listen(input, "keyup", handleKeyUp),
@@ -61490,27 +61481,11 @@ var app = (function () {
 
     		m: function mount(target, anchor) {
     			insert(target, input, anchor);
-    			insert(target, t0, anchor);
-    			insert(target, div0, anchor);
-    			append(div0, t1);
-    			append(div0, t2);
-    			insert(target, t3, anchor);
-    			insert(target, div1, anchor);
-    			append(div1, t4);
-    			append(div1, t5);
     		},
 
     		p: function update(changed, ctx) {
     			if ((changed.$mathInputStore) && input_value_value !== (input_value_value = ctx.$mathInputStore.value)) {
     				input.value = input_value_value;
-    			}
-
-    			if ((changed.$mathInputStore) && t2_value !== (t2_value = ctx.$mathInputStore.selectionRangeStart)) {
-    				set_data(t2, t2_value);
-    			}
-
-    			if ((changed.$mathInputStore) && t5_value !== (t5_value = ctx.$mathInputStore.selectionRangeEnd)) {
-    				set_data(t5, t5_value);
     			}
     		},
 
@@ -61520,10 +61495,6 @@ var app = (function () {
     		d: function destroy(detaching) {
     			if (detaching) {
     				detach(input);
-    				detach(t0);
-    				detach(div0);
-    				detach(t3);
-    				detach(div1);
     			}
 
     			run_all(dispose);
@@ -79966,12 +79937,12 @@ var app = (function () {
     			t1 = text("+");
     			attr(input, "type", "text");
     			attr(input, "maxlength", "1");
-    			attr(input, "class", "flex-grow min-w-0");
+    			attr(input, "class", "flex-grow min-w-0 p-2");
     			add_location(input, file$6, 18, 4, 340);
     			attr(button, "type", "submit");
     			button.disabled = button_disabled_value = !ctx.value;
     			attr(button, "class", "px-2");
-    			add_location(button, file$6, 19, 4, 416);
+    			add_location(button, file$6, 19, 4, 420);
     			attr(form, "class", "flex max-w-full");
     			add_location(form, file$6, 17, 0, 265);
 
@@ -80178,7 +80149,13 @@ var app = (function () {
     const file$9 = "src/App.svelte";
 
     function create_fragment$a(ctx) {
-    	var main, div0, t0, t1, div3, div1, heading0, t3, t4, heading1, t6, t7, div2, t8, div4, t9, div5, current;
+    	var main, div0, t0, div5, div1, heading0, t2, t3, heading1, t5, t6, div4, div2, t7, div3, t8, t9, div6, current;
+
+    	var solutiondisplay = new SolutionDisplay({ $$inline: true });
+
+    	var variableaddform = new VariableAddForm({ $$inline: true });
+
+    	var variablelist = new VariableList({ $$inline: true });
 
     	var mathtexrenderer = new MathTexRenderer({
     		props: { tex: ctx.$mathExpressionStore.tex },
@@ -80187,57 +80164,55 @@ var app = (function () {
 
     	var mathinput = new MathInput({ $$inline: true });
 
-    	var variableaddform = new VariableAddForm({ $$inline: true });
-
-    	var variablelist = new VariableList({ $$inline: true });
-
     	var mathbuttonpanel = new MathButtonPanel({ $$inline: true });
 
     	var insultdisplay = new InsultDisplay({ $$inline: true });
-
-    	var solutiondisplay = new SolutionDisplay({ $$inline: true });
 
     	return {
     		c: function create() {
     			main = element("main");
     			div0 = element("div");
-    			mathtexrenderer.$$.fragment.c();
+    			solutiondisplay.$$.fragment.c();
     			t0 = space();
-    			mathinput.$$.fragment.c();
-    			t1 = space();
-    			div3 = element("div");
+    			div5 = element("div");
     			div1 = element("div");
     			heading0 = element("heading");
     			heading0.textContent = "Define Variable";
-    			t3 = space();
+    			t2 = space();
     			variableaddform.$$.fragment.c();
-    			t4 = space();
+    			t3 = space();
     			heading1 = element("heading");
     			heading1.textContent = "Variables:";
-    			t6 = space();
+    			t5 = space();
     			variablelist.$$.fragment.c();
-    			t7 = space();
-    			div2 = element("div");
-    			mathbuttonpanel.$$.fragment.c();
-    			t8 = space();
+    			t6 = space();
     			div4 = element("div");
-    			insultdisplay.$$.fragment.c();
+    			div2 = element("div");
+    			mathtexrenderer.$$.fragment.c();
+    			t7 = space();
+    			div3 = element("div");
+    			mathinput.$$.fragment.c();
+    			t8 = space();
+    			mathbuttonpanel.$$.fragment.c();
     			t9 = space();
-    			div5 = element("div");
-    			solutiondisplay.$$.fragment.c();
-    			add_location(div0, file$9, 20, 1, 728);
-    			add_location(heading0, file$9, 29, 3, 857);
-    			add_location(heading1, file$9, 31, 3, 918);
+    			div6 = element("div");
+    			insultdisplay.$$.fragment.c();
+    			add_location(div0, file$9, 17, 1, 663);
+    			add_location(heading0, file$9, 25, 3, 746);
+    			add_location(heading1, file$9, 27, 3, 807);
     			attr(div1, "class", "w-48");
-    			add_location(div1, file$9, 28, 2, 835);
-    			attr(div2, "class", "flex-1");
-    			add_location(div2, file$9, 34, 2, 979);
-    			attr(div3, "class", "flex");
-    			add_location(div3, file$9, 27, 1, 814);
-    			add_location(div4, file$9, 39, 1, 1042);
-    			add_location(div5, file$9, 43, 1, 1078);
+    			add_location(div1, file$9, 24, 2, 724);
+    			attr(div2, "class", "mb-2");
+    			add_location(div2, file$9, 31, 3, 892);
+    			attr(div3, "class", "mb-2");
+    			add_location(div3, file$9, 34, 3, 979);
+    			attr(div4, "class", "flex-1");
+    			add_location(div4, file$9, 30, 2, 868);
+    			attr(div5, "class", "flex");
+    			add_location(div5, file$9, 23, 1, 703);
+    			add_location(div6, file$9, 41, 1, 1068);
     			attr(main, "class", "container mx-auto");
-    			add_location(main, file$9, 18, 0, 693);
+    			add_location(main, file$9, 14, 0, 627);
     		},
 
     		l: function claim(nodes) {
@@ -80247,28 +80222,29 @@ var app = (function () {
     		m: function mount(target, anchor) {
     			insert(target, main, anchor);
     			append(main, div0);
-    			mount_component(mathtexrenderer, div0, null);
+    			mount_component(solutiondisplay, div0, null);
     			append(main, t0);
-    			mount_component(mathinput, main, null);
-    			append(main, t1);
-    			append(main, div3);
-    			append(div3, div1);
-    			append(div1, heading0);
-    			append(div1, t3);
-    			mount_component(variableaddform, div1, null);
-    			append(div1, t4);
-    			append(div1, heading1);
-    			append(div1, t6);
-    			mount_component(variablelist, div1, null);
-    			append(div3, t7);
-    			append(div3, div2);
-    			mount_component(mathbuttonpanel, div2, null);
-    			append(main, t8);
-    			append(main, div4);
-    			mount_component(insultdisplay, div4, null);
-    			append(main, t9);
     			append(main, div5);
-    			mount_component(solutiondisplay, div5, null);
+    			append(div5, div1);
+    			append(div1, heading0);
+    			append(div1, t2);
+    			mount_component(variableaddform, div1, null);
+    			append(div1, t3);
+    			append(div1, heading1);
+    			append(div1, t5);
+    			mount_component(variablelist, div1, null);
+    			append(div5, t6);
+    			append(div5, div4);
+    			append(div4, div2);
+    			mount_component(mathtexrenderer, div2, null);
+    			append(div4, t7);
+    			append(div4, div3);
+    			mount_component(mathinput, div3, null);
+    			append(div4, t8);
+    			mount_component(mathbuttonpanel, div4, null);
+    			append(main, t9);
+    			append(main, div6);
+    			mount_component(insultdisplay, div6, null);
     			current = true;
     		},
 
@@ -80280,31 +80256,31 @@ var app = (function () {
 
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(mathtexrenderer.$$.fragment, local);
-
-    			transition_in(mathinput.$$.fragment, local);
+    			transition_in(solutiondisplay.$$.fragment, local);
 
     			transition_in(variableaddform.$$.fragment, local);
 
     			transition_in(variablelist.$$.fragment, local);
 
+    			transition_in(mathtexrenderer.$$.fragment, local);
+
+    			transition_in(mathinput.$$.fragment, local);
+
     			transition_in(mathbuttonpanel.$$.fragment, local);
 
     			transition_in(insultdisplay.$$.fragment, local);
-
-    			transition_in(solutiondisplay.$$.fragment, local);
 
     			current = true;
     		},
 
     		o: function outro(local) {
-    			transition_out(mathtexrenderer.$$.fragment, local);
-    			transition_out(mathinput.$$.fragment, local);
+    			transition_out(solutiondisplay.$$.fragment, local);
     			transition_out(variableaddform.$$.fragment, local);
     			transition_out(variablelist.$$.fragment, local);
+    			transition_out(mathtexrenderer.$$.fragment, local);
+    			transition_out(mathinput.$$.fragment, local);
     			transition_out(mathbuttonpanel.$$.fragment, local);
     			transition_out(insultdisplay.$$.fragment, local);
-    			transition_out(solutiondisplay.$$.fragment, local);
     			current = false;
     		},
 
@@ -80313,19 +80289,19 @@ var app = (function () {
     				detach(main);
     			}
 
-    			destroy_component(mathtexrenderer);
-
-    			destroy_component(mathinput);
+    			destroy_component(solutiondisplay);
 
     			destroy_component(variableaddform);
 
     			destroy_component(variablelist);
 
+    			destroy_component(mathtexrenderer);
+
+    			destroy_component(mathinput);
+
     			destroy_component(mathbuttonpanel);
 
     			destroy_component(insultdisplay);
-
-    			destroy_component(solutiondisplay);
     		}
     	};
     }
