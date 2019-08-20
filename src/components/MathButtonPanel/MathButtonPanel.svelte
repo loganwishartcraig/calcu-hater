@@ -62,28 +62,28 @@
     </section>
 
     <section class="numeric-panel">
-        <MathButton tex={'1'} on:click={applyTransform(CALC_OPERATION.ONE)} />
-        <MathButton tex={'2'} on:click={applyTransform(CALC_OPERATION.TWO)}  />
-        <MathButton tex={'3'} on:click={applyTransform(CALC_OPERATION.THREE)}  />
-        <MathButton tex={'4'} on:click={applyTransform(CALC_OPERATION.FOUR)}  />
-        <MathButton tex={'5'} on:click={applyTransform(CALC_OPERATION.FIVE)}  />
-        <MathButton tex={'6'} on:click={applyTransform(CALC_OPERATION.SIX)}  />
-        <MathButton tex={'7'} on:click={applyTransform(CALC_OPERATION.SEVEN)}  />
-        <MathButton tex={'8'} on:click={applyTransform(CALC_OPERATION.EIGHT)}  />
-        <MathButton tex={'9'} on:click={applyTransform(CALC_OPERATION.NINE)}  />
-        <MathButton tex={'0'} on:click={applyTransform(CALC_OPERATION.ZERO)}  />
-        <MathButton tex={'.'} on:click={applyTransform(CALC_OPERATION.DECIMAL)}  />
-        <MathButton tex={'='} on:click={handleSolveClick} />
+        <MathButton tex={'1'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.ONE)} />
+        <MathButton tex={'2'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.TWO)}  />
+        <MathButton tex={'3'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.THREE)}  />
+        <MathButton tex={'4'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.FOUR)}  />
+        <MathButton tex={'5'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.FIVE)}  />
+        <MathButton tex={'6'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.SIX)}  />
+        <MathButton tex={'7'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.SEVEN)}  />
+        <MathButton tex={'8'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.EIGHT)}  />
+        <MathButton tex={'9'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.NINE)}  />
+        <MathButton tex={'0'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.ZERO)}  />
+        <MathButton tex={'.'} color="bg-gray-200 hover:bg-gray-400" on:click={applyTransform(CALC_OPERATION.DECIMAL)}  />
+        <MathButton tex={'='} color="bg-orange-200 hover:bg-orange-300" on:click={handleSolveClick} />
     </section>
 
     <section class="basic-ops-panel">
         <MathButton tex={'clear'} on:click={handleClearClick} />
         <MathButton tex={'mod'}   on:click={applyTransform(CALC_OPERATION.MOD)}/>
         <MathButton tex={'*10^y'}   on:click={applyTransform(CALC_OPERATION.RAISE_TEN)}/>
-        <MathButton tex={ '/'}  on:click={applyTransform(CALC_OPERATION.DIVIDE)}/>
-        <MathButton tex={'*'}   on:click={applyTransform(CALC_OPERATION.MULTIPLY)}/>
-        <MathButton tex={'-'}   on:click={applyTransform(CALC_OPERATION.SUBTRACT)}/>
-        <MathButton tex={'+'}   on:click={applyTransform(CALC_OPERATION.ADD)}/>
+        <MathButton tex={ '/'} color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.DIVIDE)}/>
+        <MathButton tex={'*'}  color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.MULTIPLY)}/>
+        <MathButton tex={'-'}  color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.SUBTRACT)}/>
+        <MathButton tex={'+'}  color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.ADD)}/>
     </section>
 
     <section class="trig-panel">
