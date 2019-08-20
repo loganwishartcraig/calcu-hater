@@ -15,7 +15,7 @@
 
 </script>
 
-<form on:submit|preventDefault={handleSubmit}>
-    <input bind:value type="text" maxlength="1" />
-    <button type="submit" disabled={!value}>Add Variable</button>
+<form on:submit|preventDefault={handleSubmit} class="flex max-w-full">
+    <input bind:value type="text" maxlength="1" class="flex-grow min-w-0"/>
+    <button type="submit" disabled={!value} class="px-2">+</button>
 </form>

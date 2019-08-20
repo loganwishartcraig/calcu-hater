@@ -1,0 +1,48 @@
+
+.calculator-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+        "trig trig grouper grouper grouper basic"
+        "advanced advanced constant constant constant basic"
+        "advanced advanced numeric numeric numeric basic"
+        "advanced advanced numeric numeric numeric basic"
+        "advanced advanced numeric numeric numeric basic"
+        "advanced advanced numeric numeric numeric basic";
+}
+
+.constant-panel {
+    display: grid;
+    grid-area: constant;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.numeric-panel {
+    display: grid;
+    grid-area: numeric;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grouper-panel {
+    display: grid;
+    grid-area: grouper;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.trig-panel {
+    display: grid;
+    grid-area: trig;
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.basic-ops-panel {
+    display: grid;
+    grid-area: basic;
+}
+
+.advanced-ops-panel {
+    display: grid;
+    grid-area: advanced;
+    grid-template-columns: repeat(2, 1fr);
+}

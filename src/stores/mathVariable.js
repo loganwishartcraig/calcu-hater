@@ -28,7 +28,7 @@ export const mathVariableStore = {
 
     },
 
-    clearVariable(name) {
+    removeVariable(name) {
 
         update(state => {
 

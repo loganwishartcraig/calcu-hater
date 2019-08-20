@@ -29,4 +29,5 @@
         <MathTexRenderer {tex} />
         <input type="text" bind:value on:change={handleChange} />
     </label>
+    <button type="button">X</button>
 </li>

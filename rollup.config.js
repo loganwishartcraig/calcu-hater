@@ -3,7 +3,7 @@ import resolve from 'rollup-plugin-node-resolve';
 import commonjs from 'rollup-plugin-commonjs';
 import livereload from 'rollup-plugin-livereload';
 import { terser } from 'rollup-plugin-terser';
-// import postcss from 'rollup-plugin-postcss'
+import postcss from 'rollup-plugin-postcss'
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -16,6 +16,16 @@ export default {
 		file: 'public/bundle.js'
 	},
 	plugins: [
+
+		postcss({
+			plugins: [
+				require('postcss-import'),
+				require('autoprefixer'),
+				require('tailwindcss'),
+			],
+			extract: true
+		}),
+
 		svelte({
 			// enable run-time checks when not in production
 			dev: !production,
@@ -23,7 +33,33 @@ export default {
 			// a separate file — better for performance
 			css: css => {
 				css.write('public/bundle.css');
-			}
+			},
+			// preprocess: {
+			// 	style: ({ content, attributes }) => {
+
+			// 		if (attributes.type !== 'text/postcss') {
+			// 			return;
+			// 		};
+
+			// 		// Plugins List:
+			// 		// https://github.com/postcss/postcss/blob/master/docs/plugins.md
+			// 		const plugins = [
+			// 			tailwindcss,
+			// 			postcssImport,
+			// 			autoprefixer
+			// 		];
+			// 		return postcss(plugins)
+			// 			.process(content, {
+			// 				from: 'src',
+			// 				map: { inline: false }
+			// 			})
+			// 			.then((result) => ({
+			// 				code: result.css.toString(),
+			// 				map: result.map.toString()
+			// 			}));
+
+			// 	}
+			// }
 		}),
 
 		// If you have external dependencies installed from
@@ -36,13 +72,7 @@ export default {
 			dedupe: importee => importee === 'svelte' || importee.startsWith('svelte/')
 		}),
 		commonjs(),
-		// postcss({
-		// 	plugins: [
-		// 		require('tailwindcss'),
-		// 		require('autoprefixer')
-		// 	],
-		// 	extract: true
-		// }),
+
 
 		// Watch the `public` directory and refresh the
 		// browser on changes when not in production

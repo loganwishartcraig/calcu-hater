@@ -7,6 +7,6 @@
 
 </script>
 
-<GenericButton on:click>
+<GenericButton on:click classList="bg-gray-100 hover:bg-gray-300 p-4">
     <MathTexRenderer {tex} />
 </GenericButton>

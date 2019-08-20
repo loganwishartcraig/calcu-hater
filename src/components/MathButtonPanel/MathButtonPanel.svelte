@@ -41,71 +41,24 @@
 
 <style>
 
-    .calculator-panel {
-        display: grid;
-        grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
-        grid-template-rows: auto;
-        grid-template-areas:
-            "trig trig grouper grouper grouper basic"
-            "advanced advanced constant constant constant basic"
-            "advanced advanced numeric numeric numeric basic"
-            "advanced advanced numeric numeric numeric basic"
-            "advanced advanced numeric numeric numeric basic"
-            "advanced advanced numeric numeric numeric basic";
-    }
-
-    .constant-panel {
-        display: grid;
-        grid-area: constant;
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .numeric-panel {
-        display: grid;
-        grid-area: numeric;
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .grouper-panel {
-        display: grid;
-        grid-area: grouper;
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .trig-panel {
-        display: grid;
-        grid-area: trig;
-        grid-template-columns: repeat(3, 1fr);
-    }
-
-    .basic-ops-panel {
-        display: grid;
-        grid-area: basic;
-    }
-
-    .advanced-ops-panel {
-        display: grid;
-        grid-area: advanced;
-        grid-template-columns: repeat(2, 1fr);
-    }
 
 </style>
 
 <div class="calculator-panel">
 
-    <div class="grouper-panel">
+    <section class="grouper-panel">
         <MathButton tex={'('}   on:click={applyTransform(CALC_OPERATION.OPEN_PAREN)}/>
         <MathButton tex={')'}   on:click={applyTransform(CALC_OPERATION.CLOSE_PAREN)}/>
         <MathButton tex={'(x)'}   on:click={applyTransform(CALC_OPERATION.WRAP_PAREN)}/>
-    </div>
+    </section>
 
-    <div class="constant-panel">
+    <section class="constant-panel">
         <MathButton tex={'\\pi'}  on:click={applyTransform(CALC_OPERATION.PI)}/>
         <MathButton tex={'e'}   on:click={applyTransform(CALC_OPERATION.E)}/>
         <MathButton tex={'i'}   on:click={applyTransform(CALC_OPERATION.I)}/>
-    </div>
+    </section>
 
-    <div class="numeric-panel">
+    <section class="numeric-panel">
         <MathButton tex={'1'} on:click={applyTransform(CALC_OPERATION.ONE)} />
         <MathButton tex={'2'} on:click={applyTransform(CALC_OPERATION.TWO)}  />
         <MathButton tex={'3'} on:click={applyTransform(CALC_OPERATION.THREE)}  />
@@ -118,9 +71,9 @@
         <MathButton tex={'0'} on:click={applyTransform(CALC_OPERATION.ZERO)}  />
         <MathButton tex={'.'} on:click={applyTransform(CALC_OPERATION.DECIMAL)}  />
         <MathButton tex={'='} on:click={handleSolveClick} />
-    </div>
+    </section>
 
-    <div class="basic-ops-panel">
+    <section class="basic-ops-panel">
         <MathButton tex={'clear'} on:click={handleClearClick} />
         <MathButton tex={'mod'}   on:click={applyTransform(CALC_TRANSFORM[CALC_OPERATION.MOD])}/>
         <MathButton tex={'*10^y'}   on:click={applyTransform(CALC_OPERATION.RAISE_TEN)}/>
@@ -128,18 +81,18 @@
         <MathButton tex={'*'}   on:click={applyTransform(CALC_OPERATION.MULTIPLY)}/>
         <MathButton tex={'-'}   on:click={applyTransform(CALC_OPERATION.SUBTRACT)}/>
         <MathButton tex={'+'}   on:click={applyTransform(CALC_OPERATION.ADD)}/>
-    </div>
+    </section>
 
-    <div class="trig-panel">
+    <section class="trig-panel">
         <MathButton tex={'cos(x)'}   on:click={applyTransform(CALC_OPERATION.COS)}/>
         <MathButton tex={'sin(x)'}   on:click={applyTransform(CALC_OPERATION.SIN)}/>
         <MathButton tex={'tan(x)'}   on:click={applyTransform(CALC_OPERATION.TAN)}/>
         <MathButton tex={'sinh(x)'}   on:click={applyTransform(CALC_OPERATION.SINH)}/>
         <MathButton tex={'cosh(x)'}   on:click={applyTransform(CALC_OPERATION.COSH)}/>
         <MathButton tex={'tanh(x)'}   on:click={applyTransform(CALC_OPERATION.TANH)}/>
-    </div>
+    </section>
 
-    <div class="advanced-ops-panel">
+    <section class="advanced-ops-panel">
         <MathButton tex={'x^{-1}'}   on:click={applyTransform(CALC_OPERATION.POWER_NEGATIVE_ONE)}/>
         <MathButton tex={'x^y'}   on:click={applyTransform(CALC_OPERATION.POWER_Y)}/>
         <MathButton tex={'x^2'}   on:click={applyTransform(CALC_OPERATION.POWER_TWO)}/>
@@ -150,7 +103,7 @@
         <MathButton tex={'ln(x)'}   on:click={applyTransform(CALC_OPERATION.LN)}/>
         <MathButton tex={'lg(x)'}   on:click={applyTransform(CALC_OPERATION.LG)}/>
         <MathButton tex={'log_a(x)'}   on:click={applyTransform(CALC_OPERATION.LOG_BASE_A)}/>
-    </div>
+    </section>
 
 
 </div>

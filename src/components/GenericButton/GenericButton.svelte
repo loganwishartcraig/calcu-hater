@@ -2,8 +2,8 @@
 
     import { createEventDispatcher } from 'svelte';
 
-    export let label;
     export let type = 'button';
+    export let classList = '';
 
     const dispatch = createEventDispatcher();
 
@@ -14,7 +14,7 @@
 
 </script>
 
-<button {type} on:click={handleClick}>
+<button {type} on:click={handleClick} class={classList}>
     <slot></slot>
 </button>
 
