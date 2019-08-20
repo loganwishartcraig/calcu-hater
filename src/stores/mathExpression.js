@@ -4,7 +4,8 @@ import { mathInputStore } from './mathInput';
 
 const initialState = {
     parsed: undefined,
-    tex: ''
+    tex: '',
+    error: '',
 };
 
 export const mathExpressionStore = derived(mathInputStore, $mathInputStore => {
@@ -14,11 +15,11 @@ export const mathExpressionStore = derived(mathInputStore, $mathInputStore => {
         const parsed = parse($mathInputStore.value || '');
         const tex = parsed.toTex({ parenthesis: 'keep' });
 
-        return { parsed, tex };
+        return { parsed, tex, error: '' };
 
     } catch (e) {
         console.error('Failed to parse expression', { e });
-        return { ...initialState };
+        return { ...initialState, error: e.message };
     }
 
 }, { ...initialState });

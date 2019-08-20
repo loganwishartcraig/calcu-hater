@@ -11,6 +11,4 @@
 
 {#if rendered && tex !== 'undefined'}
     <span class={className}>{@html rendered}</span>
-{:else}
-    <span class={className}>Waiting...</span>
 {/if}
