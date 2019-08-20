@@ -75,7 +75,7 @@
 
     <section class="basic-ops-panel">
         <MathButton tex={'clear'} on:click={handleClearClick} />
-        <MathButton tex={'mod'}   on:click={applyTransform(CALC_TRANSFORM[CALC_OPERATION.MOD])}/>
+        <MathButton tex={'mod'}   on:click={applyTransform(CALC_OPERATION.MOD)}/>
         <MathButton tex={'*10^y'}   on:click={applyTransform(CALC_OPERATION.RAISE_TEN)}/>
         <MathButton tex={ '/'}  on:click={applyTransform(CALC_OPERATION.DIVIDE)}/>
         <MathButton tex={'*'}   on:click={applyTransform(CALC_OPERATION.MULTIPLY)}/>

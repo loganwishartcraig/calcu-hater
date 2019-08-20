@@ -79033,7 +79033,7 @@ var app = (function () {
     		props: { tex: 'mod' },
     		$$inline: true
     	});
-    	mathbutton19.$on("click", applyTransform(CALC_TRANSFORM[CALC_OPERATION.MOD]));
+    	mathbutton19.$on("click", applyTransform(CALC_OPERATION.MOD));
 
     	var mathbutton20 = new MathButton({
     		props: { tex: '*10^y' },
@@ -79260,9 +79260,9 @@ var app = (function () {
     			attr(section3, "class", "basic-ops-panel");
     			add_location(section3, file$3, 75, 4, 3113);
     			attr(section4, "class", "trig-panel");
-    			add_location(section4, file$3, 85, 4, 3753);
+    			add_location(section4, file$3, 85, 4, 3737);
     			attr(section5, "class", "advanced-ops-panel");
-    			add_location(section5, file$3, 94, 4, 4318);
+    			add_location(section5, file$3, 94, 4, 4302);
     			attr(div, "class", "calculator-panel");
     			add_location(div, file$3, 46, 0, 1465);
     		},
