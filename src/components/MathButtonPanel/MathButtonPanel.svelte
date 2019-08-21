@@ -7,6 +7,8 @@
     import CALC_OPERATION from '../../constants/CalcOperations.js';
     import CALC_TRANSFORM from '../../transforms/CalcOperations.js';
 
+    export let className = '';
+
     function handleSolveClick()  {
         globalChaosService.get()
             .then(({type, payload}) => {
@@ -41,7 +43,7 @@
 
 
 
-<div class="calculator-panel">
+<div class="calculator-panel {className}">
 
     <section class="grouper-panel">
         <MathButton tex={'('}   on:click={applyTransform(CALC_OPERATION.OPEN_PAREN)}/>

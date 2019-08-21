@@ -8339,6 +8339,33 @@ video {
   z-index: auto;
 }
 
+.app-container {
+  height: 100vh;
+  width: 100vw;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto;
+  grid-template:
+        "output history"
+        "input variable";
+}
+
+.history-container {
+  grid-area: history;
+}
+
+.solution-container {
+  grid-area: output;
+}
+
+.variable-container {
+  grid-area: variable;
+}
+
+.input-container {
+  grid-area: input;
+}
+
 .calculator-panel {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
@@ -8392,6 +8419,10 @@ video {
   display: grid;
   grid-area: advanced;
   grid-template-columns: repeat(2, 1fr);
+}
+
+body {
+  padding: 0;
 }
 
 @media (min-width: 640px) {

@@ -13,23 +13,26 @@
 </script>
 
 
-<main class="container mx-auto">
+<main class="app-container">
 
+	<div class="history-container">
+		[[HISTORY]]
+	</div>
 
-	<div>
+	<div class="solution-container">
+		<InsultDisplay />
 		<SolutionDisplay />
 	</div>
 
+	<div class="variable-container">
+		<heading>Define Variable</heading>
+		<VariableAddForm />
+		<heading>Variables:</heading>
+		<VariableList />
+	</div>
 
-
-	<div class="flex">
-		<div class="w-48">
-			<heading>Define Variable</heading>
-			<VariableAddForm />
-			<heading>Variables:</heading>
-			<VariableList />
-		</div>
-		<div class="flex-1">
+	<div class="input-container">
+		<div class="flex flex-col h-full">
 			<div class="mb-2 text-center">
 				<MathInputTexRender className="text-5xl" let:error>
 					{#if error}
@@ -42,12 +45,8 @@
 			<div class="mb-2">
 				<MathInput />
 			</div>
-			<MathButtonPanel />
+			<MathButtonPanel className="flex-grow" />
 		</div>
-	</div>
-
-	<div>
-		<InsultDisplay />
 	</div>
 
 </main>
