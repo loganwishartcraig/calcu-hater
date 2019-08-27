@@ -79,7 +79,7 @@
     </section>
 
     <section class="basic-ops-panel">
-        <MathButton tex={'clear'} on:click={handleClearClick} />
+        <MathButton tex={'clear'} color="bg-red-200 hover:bg-red-300" on:click={handleClearClick} />
         <MathButton tex={'mod'}   on:click={applyTransform(CALC_OPERATION.MOD)}/>
         <MathButton tex={'*10^y'}   on:click={applyTransform(CALC_OPERATION.RAISE_TEN)}/>
         <MathButton tex={ '/'} color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.DIVIDE)}/>

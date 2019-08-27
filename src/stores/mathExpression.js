@@ -8,6 +8,11 @@ const initialState = {
     error: '',
 };
 
+/**
+ * Stores the last state as produced by the derived store
+ */
+let lastState = { ...initialState };
+
 export const mathExpressionStore = derived(mathInputStore, $mathInputStore => {
 
     try {
@@ -15,11 +20,11 @@ export const mathExpressionStore = derived(mathInputStore, $mathInputStore => {
         const parsed = parse($mathInputStore.value || '');
         const tex = parsed.toTex({ parenthesis: 'keep' });
 
-        return { parsed, tex, error: '' };
+        return lastState = { parsed, tex, error: '' };
 
     } catch (e) {
-        console.error('Failed to parse expression', { e });
-        return { ...initialState, error: e.message };
+        console.error('Failed to parse expression', { e, lastState });
+        return { ...lastState, error: e.message };
     }
 
 }, { ...initialState });

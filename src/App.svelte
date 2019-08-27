@@ -35,11 +35,12 @@
 		<div class="flex flex-col h-full">
 			<div class="mb-2 text-center">
 				<MathInputTexRender className="text-5xl" let:error>
-					{#if error}
-						<span class="text-5xl text-red-500">Whoa bud. {error}</span>
-					{:else}
-						<i class="text-5xl">Well?</i>
-					{/if}
+					<!-- {#if error} -->
+						<div slot="error"><span class="text-red-500">Whoa bud. {error}</span></div>
+						<div slot="waiting" class="text-5xl"><i>Well...?</i></div>
+					<!-- {:else} -->
+						<!-- <i class="text-5xl">Well?</i> -->
+					<!-- {/if} -->
 				</MathInputTexRender>
 			</div>
 			<div class="mb-2">
