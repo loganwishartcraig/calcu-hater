@@ -79242,19 +79242,19 @@ var app = (function () {
     		props: { tex: 'x' },
     		$$inline: true
     	});
-    	mathbutton3.$on("click", applyTransform(CALC_OPERATION.X));
+    	mathbutton3.$on("click", ctx.click_handler);
 
     	var mathbutton4 = new MathButton({
     		props: { tex: 'y' },
     		$$inline: true
     	});
-    	mathbutton4.$on("click", applyTransform(CALC_OPERATION.Y));
+    	mathbutton4.$on("click", ctx.click_handler_1);
 
     	var mathbutton5 = new MathButton({
     		props: { tex: 'z' },
     		$$inline: true
     	});
-    	mathbutton5.$on("click", applyTransform(CALC_OPERATION.Z));
+    	mathbutton5.$on("click", ctx.click_handler_2);
 
     	var mathbutton6 = new MathButton({
     		props: { tex: '\\pi' },
@@ -79633,21 +79633,21 @@ var app = (function () {
     			t42 = space();
     			mathbutton43.$$.fragment.c();
     			attr(section0, "class", "grouper-panel");
-    			add_location(section0, file$3, 47, 4, 1527);
+    			add_location(section0, file$3, 46, 4, 1434);
     			attr(section1, "class", "variable-panel");
-    			add_location(section1, file$3, 53, 4, 1843);
+    			add_location(section1, file$3, 52, 4, 1750);
     			attr(section2, "class", "constant-panel");
-    			add_location(section2, file$3, 59, 4, 2129);
+    			add_location(section2, file$3, 67, 4, 2349);
     			attr(section3, "class", "numeric-panel");
-    			add_location(section3, file$3, 65, 4, 2419);
+    			add_location(section3, file$3, 73, 4, 2639);
     			attr(section4, "class", "basic-ops-panel");
-    			add_location(section4, file$3, 80, 4, 3885);
+    			add_location(section4, file$3, 88, 4, 4105);
     			attr(section5, "class", "trig-panel");
-    			add_location(section5, file$3, 90, 4, 4697);
+    			add_location(section5, file$3, 98, 4, 4917);
     			attr(section6, "class", "advanced-ops-panel");
-    			add_location(section6, file$3, 99, 4, 5262);
+    			add_location(section6, file$3, 107, 4, 5482);
     			attr(div, "class", div_class_value = "calculator-panel " + ctx.className);
-    			add_location(div, file$3, 45, 0, 1479);
+    			add_location(div, file$3, 44, 0, 1386);
     		},
 
     		l: function claim(nodes) {
@@ -80031,7 +80031,6 @@ var app = (function () {
                     }
                 })
                 .then(() => {
-                    console.warn('expression', $mathExpressionStore.parsed, $mathVariableStore);
                     mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore);
                 })
                 .catch(e => console.error('Error creating chaos...', {e}));
@@ -80042,11 +80041,32 @@ var app = (function () {
     		if (!writable_props.includes(key) && !key.startsWith('$$')) console_1.warn(`<MathButtonPanel> was created with unknown prop '${key}'`);
     	});
 
+    	function click_handler() {
+    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.X]);
+    	            mathVariableStore.add('x');
+    	        }
+
+    	function click_handler_1() {
+    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Y]);
+    	            mathVariableStore.add('y');
+    	        }
+
+    	function click_handler_2() {
+    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Z]);
+    	            mathVariableStore.add('z');
+    	        }
+
     	$$self.$set = $$props => {
     		if ('className' in $$props) $$invalidate('className', className = $$props.className);
     	};
 
-    	return { className, handleSolveClick };
+    	return {
+    		className,
+    		handleSolveClick,
+    		click_handler,
+    		click_handler_1,
+    		click_handler_2
+    	};
     }
 
     class MathButtonPanel extends SvelteComponentDev {
@@ -80562,24 +80582,22 @@ var app = (function () {
     const get_error_slot_changes$1 = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore });
     const get_error_slot_context$1 = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore.error });
 
-    // (14:0) {:else}
+    const get_post_slot_changes = () => ({});
+    const get_post_slot_context = () => ({});
+
+    const get_pre_slot_changes = () => ({});
+    const get_pre_slot_context = () => ({});
+
+    // (18:0) {:else}
     function create_else_block$1(ctx) {
-    	var span, current;
+    	var current;
 
     	const waiting_slot_template = ctx.$$slots.waiting;
     	const waiting_slot = create_slot(waiting_slot_template, ctx, get_waiting_slot_context$1);
 
     	return {
     		c: function create() {
-    			if (!waiting_slot) {
-    				span = element("span");
-    				span.textContent = "Waiting...";
-    			}
-
     			if (waiting_slot) waiting_slot.c();
-    			if (!waiting_slot) {
-    				add_location(span, file$8, 14, 25, 330);
-    			}
     		},
 
     		l: function claim(nodes) {
@@ -80587,11 +80605,7 @@ var app = (function () {
     		},
 
     		m: function mount(target, anchor) {
-    			if (!waiting_slot) {
-    				insert(target, span, anchor);
-    			}
-
-    			else {
+    			if (waiting_slot) {
     				waiting_slot.m(target, anchor);
     			}
 
@@ -80619,18 +80633,12 @@ var app = (function () {
     		},
 
     		d: function destroy(detaching) {
-    			if (!waiting_slot) {
-    				if (detaching) {
-    					detach(span);
-    				}
-    			}
-
     			if (waiting_slot) waiting_slot.d(detaching);
     		}
     	};
     }
 
-    // (12:54) 
+    // (16:54) 
     function create_if_block_1$1(ctx) {
     	var current;
 
@@ -80680,35 +80688,100 @@ var app = (function () {
     	};
     }
 
-    // (10:0) {#if typeof $mathSolutionStore.solution === 'number'}
+    // (12:0) {#if typeof $mathSolutionStore.solution === 'number'}
     function create_if_block$2(ctx) {
-    	var span, t_value = ctx.$mathSolutionStore.solution, t;
+    	var t0, span, t1_value = ctx.$mathSolutionStore.solution, t1, t2, current;
+
+    	const pre_slot_template = ctx.$$slots.pre;
+    	const pre_slot = create_slot(pre_slot_template, ctx, get_pre_slot_context);
+
+    	const post_slot_template = ctx.$$slots.post;
+    	const post_slot = create_slot(post_slot_template, ctx, get_post_slot_context);
 
     	return {
     		c: function create() {
+    			if (pre_slot) pre_slot.c();
+    			t0 = space();
     			span = element("span");
-    			t = text(t_value);
-    			add_location(span, file$8, 10, 4, 135);
+    			t1 = text(t1_value);
+    			t2 = space();
+
+    			if (post_slot) post_slot.c();
+
+    			attr(span, "class", ctx.classList);
+    			add_location(span, file$8, 13, 4, 196);
+    		},
+
+    		l: function claim(nodes) {
+    			if (pre_slot) pre_slot.l(nodes);
+
+    			if (post_slot) post_slot.l(nodes);
     		},
 
     		m: function mount(target, anchor) {
+    			if (pre_slot) {
+    				pre_slot.m(target, anchor);
+    			}
+
+    			insert(target, t0, anchor);
     			insert(target, span, anchor);
-    			append(span, t);
+    			append(span, t1);
+    			insert(target, t2, anchor);
+
+    			if (post_slot) {
+    				post_slot.m(target, anchor);
+    			}
+
+    			current = true;
     		},
 
     		p: function update(changed, ctx) {
-    			if ((changed.$mathSolutionStore) && t_value !== (t_value = ctx.$mathSolutionStore.solution)) {
-    				set_data(t, t_value);
+    			if (pre_slot && pre_slot.p && changed.$$scope) {
+    				pre_slot.p(
+    					get_slot_changes(pre_slot_template, ctx, changed, get_pre_slot_changes),
+    					get_slot_context(pre_slot_template, ctx, get_pre_slot_context)
+    				);
+    			}
+
+    			if ((!current || changed.$mathSolutionStore) && t1_value !== (t1_value = ctx.$mathSolutionStore.solution)) {
+    				set_data(t1, t1_value);
+    			}
+
+    			if (!current || changed.classList) {
+    				attr(span, "class", ctx.classList);
+    			}
+
+    			if (post_slot && post_slot.p && changed.$$scope) {
+    				post_slot.p(
+    					get_slot_changes(post_slot_template, ctx, changed, get_post_slot_changes),
+    					get_slot_context(post_slot_template, ctx, get_post_slot_context)
+    				);
     			}
     		},
 
-    		i: noop,
-    		o: noop,
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(pre_slot, local);
+    			transition_in(post_slot, local);
+    			current = true;
+    		},
+
+    		o: function outro(local) {
+    			transition_out(pre_slot, local);
+    			transition_out(post_slot, local);
+    			current = false;
+    		},
 
     		d: function destroy(detaching) {
+    			if (pre_slot) pre_slot.d(detaching);
+
     			if (detaching) {
+    				detach(t0);
     				detach(span);
+    				detach(t2);
     			}
+
+    			if (post_slot) post_slot.d(detaching);
     		}
     	};
     }
@@ -80798,19 +80871,40 @@ var app = (function () {
     	validate_store(mathSolutionStore, 'mathSolutionStore');
     	component_subscribe($$self, mathSolutionStore, $$value => { $mathSolutionStore = $$value; $$invalidate('$mathSolutionStore', $mathSolutionStore); });
 
+    	let { classList = '' } = $$props;
+
+    	const writable_props = ['classList'];
+    	Object.keys($$props).forEach(key => {
+    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<SolutionDisplay> was created with unknown prop '${key}'`);
+    	});
+
     	let { $$slots = {}, $$scope } = $$props;
 
     	$$self.$set = $$props => {
+    		if ('classList' in $$props) $$invalidate('classList', classList = $$props.classList);
     		if ('$$scope' in $$props) $$invalidate('$$scope', $$scope = $$props.$$scope);
     	};
 
-    	return { $mathSolutionStore, $$slots, $$scope };
+    	return {
+    		classList,
+    		$mathSolutionStore,
+    		$$slots,
+    		$$scope
+    	};
     }
 
     class SolutionDisplay extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$a, create_fragment$a, safe_not_equal, []);
+    		init(this, options, instance$a, create_fragment$a, safe_not_equal, ["classList"]);
+    	}
+
+    	get classList() {
+    		throw new Error("<SolutionDisplay>: Props cannot be read directly from the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
+    	}
+
+    	set classList(value) {
+    		throw new Error("<SolutionDisplay>: Props cannot be set directly on the component instance unless compiling with 'accessors: true' or '<svelte:options accessors/>'");
     	}
     }
 
@@ -80818,7 +80912,41 @@ var app = (function () {
 
     const file$9 = "src/App.svelte";
 
-    // (39:6) <div slot="error">
+    // (27:4) <span slot="pre">
+    function create_pre_slot(ctx) {
+    	var span;
+
+    	return {
+    		c: function create() {
+    			span = element("span");
+    			span.textContent = "Ans:";
+    			attr(span, "slot", "pre");
+    			add_location(span, file$9, 26, 4, 989);
+    		},
+
+    		m: function mount(target, anchor) {
+    			insert(target, span, anchor);
+    		},
+
+    		d: function destroy(detaching) {
+    			if (detaching) {
+    				detach(span);
+    			}
+    		}
+    	};
+    }
+
+    // (26:3) <SolutionDisplay classList="text-blue-500">
+    function create_default_slot_1(ctx) {
+    	return {
+    		c: noop,
+    		m: noop,
+    		p: noop,
+    		d: noop
+    	};
+    }
+
+    // (44:5) <div slot="error">
     function create_error_slot(ctx) {
     	var div, span, t0, t1_value = ctx.error, t1;
 
@@ -80829,9 +80957,9 @@ var app = (function () {
     			t0 = text("Whoa bud. ");
     			t1 = text(t1_value);
     			attr(span, "class", "text-red-500");
-    			add_location(span, file$9, 38, 24, 1258);
+    			add_location(span, file$9, 43, 23, 1403);
     			attr(div, "slot", "error");
-    			add_location(div, file$9, 38, 6, 1240);
+    			add_location(div, file$9, 43, 5, 1385);
     		},
 
     		m: function mount(target, anchor) {
@@ -80855,7 +80983,7 @@ var app = (function () {
     	};
     }
 
-    // (40:6) <div slot="waiting" class="text-5xl">
+    // (45:5) <div slot="waiting" class="text-3xl">
     function create_waiting_slot(ctx) {
     	var div, i;
 
@@ -80864,10 +80992,10 @@ var app = (function () {
     			div = element("div");
     			i = element("i");
     			i.textContent = "Well...?";
-    			add_location(i, file$9, 39, 43, 1359);
+    			add_location(i, file$9, 44, 42, 1503);
     			attr(div, "slot", "waiting");
-    			attr(div, "class", "text-5xl");
-    			add_location(div, file$9, 39, 6, 1322);
+    			attr(div, "class", "text-3xl");
+    			add_location(div, file$9, 44, 5, 1466);
     		},
 
     		m: function mount(target, anchor) {
@@ -80883,7 +81011,7 @@ var app = (function () {
     	};
     }
 
-    // (37:4) <MathInputTexRender className="text-5xl" let:error>
+    // (43:4) <MathInputTexRender className="text-3xl" let:error>
     function create_default_slot$1(ctx) {
     	var t;
 
@@ -80907,11 +81035,21 @@ var app = (function () {
     }
 
     function create_fragment$b(ctx) {
-    	var main, div0, t1, div1, t2, t3, div2, heading0, t5, t6, heading1, t8, t9, div6, div5, div3, t10, div4, t11, current;
+    	var main, div0, t1, div3, div2, t2, div1, t3, div4, heading0, t5, t6, heading1, t8, t9, div8, div7, div5, t10, div6, t11, current;
 
     	var insultdisplay = new InsultDisplay({ $$inline: true });
 
-    	var solutiondisplay = new SolutionDisplay({ $$inline: true });
+    	var solutiondisplay = new SolutionDisplay({
+    		props: {
+    		classList: "text-blue-500",
+    		$$slots: {
+    		default: [create_default_slot_1],
+    		pre: [create_pre_slot]
+    	},
+    		$$scope: { ctx }
+    	},
+    		$$inline: true
+    	});
 
     	var variableaddform = new VariableAddForm({ $$inline: true });
 
@@ -80919,7 +81057,7 @@ var app = (function () {
 
     	var mathinputtexrender = new MathInputTexRender({
     		props: {
-    		className: "text-5xl",
+    		className: "text-3xl",
     		$$slots: {
     		default: [create_default_slot$1, ({ error }) => ({ error })],
     		waiting: [create_waiting_slot, ({ error }) => ({ error })],
@@ -80943,12 +81081,14 @@ var app = (function () {
     			div0 = element("div");
     			div0.textContent = "[[HISTORY]]";
     			t1 = space();
-    			div1 = element("div");
+    			div3 = element("div");
+    			div2 = element("div");
     			insultdisplay.$$.fragment.c();
     			t2 = space();
+    			div1 = element("div");
     			solutiondisplay.$$.fragment.c();
     			t3 = space();
-    			div2 = element("div");
+    			div4 = element("div");
     			heading0 = element("heading");
     			heading0.textContent = "Define Variable";
     			t5 = space();
@@ -80959,31 +81099,33 @@ var app = (function () {
     			t8 = space();
     			variablelist.$$.fragment.c();
     			t9 = space();
-    			div6 = element("div");
+    			div8 = element("div");
+    			div7 = element("div");
     			div5 = element("div");
-    			div3 = element("div");
     			mathinputtexrender.$$.fragment.c();
     			t10 = space();
-    			div4 = element("div");
+    			div6 = element("div");
     			mathinput.$$.fragment.c();
     			t11 = space();
     			mathbuttonpanel.$$.fragment.c();
     			attr(div0, "class", "history-container");
     			add_location(div0, file$9, 17, 1, 757);
-    			attr(div1, "class", "solution-container");
-    			add_location(div1, file$9, 21, 1, 813);
-    			add_location(heading0, file$9, 27, 2, 933);
-    			add_location(heading1, file$9, 29, 2, 992);
-    			attr(div2, "class", "variable-container");
-    			add_location(div2, file$9, 26, 1, 898);
-    			attr(div3, "class", "mb-2 text-center");
-    			add_location(div3, file$9, 35, 3, 1121);
-    			attr(div4, "class", "mb-2");
-    			add_location(div4, file$9, 45, 3, 1507);
-    			attr(div5, "class", "flex flex-col h-full");
-    			add_location(div5, file$9, 34, 2, 1083);
-    			attr(div6, "class", "input-container");
-    			add_location(div6, file$9, 33, 1, 1051);
+    			add_location(div1, file$9, 24, 3, 932);
+    			add_location(div2, file$9, 22, 2, 902);
+    			attr(div3, "class", "solution-container flex items-center justify-center text-5xl text-center");
+    			add_location(div3, file$9, 21, 1, 813);
+    			add_location(heading0, file$9, 33, 2, 1105);
+    			add_location(heading1, file$9, 35, 2, 1164);
+    			attr(div4, "class", "variable-container");
+    			add_location(div4, file$9, 32, 1, 1070);
+    			attr(div5, "class", "mb-2 text-center");
+    			add_location(div5, file$9, 41, 3, 1293);
+    			attr(div6, "class", "mb-2");
+    			add_location(div6, file$9, 47, 3, 1564);
+    			attr(div7, "class", "flex flex-col h-full");
+    			add_location(div7, file$9, 40, 2, 1255);
+    			attr(div8, "class", "input-container");
+    			add_location(div8, file$9, 39, 1, 1223);
     			attr(main, "class", "app-container");
     			add_location(main, file$9, 15, 0, 726);
     		},
@@ -80996,33 +81138,39 @@ var app = (function () {
     			insert(target, main, anchor);
     			append(main, div0);
     			append(main, t1);
-    			append(main, div1);
-    			mount_component(insultdisplay, div1, null);
-    			append(div1, t2);
+    			append(main, div3);
+    			append(div3, div2);
+    			mount_component(insultdisplay, div2, null);
+    			append(div2, t2);
+    			append(div2, div1);
     			mount_component(solutiondisplay, div1, null);
     			append(main, t3);
-    			append(main, div2);
-    			append(div2, heading0);
-    			append(div2, t5);
-    			mount_component(variableaddform, div2, null);
-    			append(div2, t6);
-    			append(div2, heading1);
-    			append(div2, t8);
-    			mount_component(variablelist, div2, null);
+    			append(main, div4);
+    			append(div4, heading0);
+    			append(div4, t5);
+    			mount_component(variableaddform, div4, null);
+    			append(div4, t6);
+    			append(div4, heading1);
+    			append(div4, t8);
+    			mount_component(variablelist, div4, null);
     			append(main, t9);
-    			append(main, div6);
-    			append(div6, div5);
-    			append(div5, div3);
-    			mount_component(mathinputtexrender, div3, null);
-    			append(div5, t10);
-    			append(div5, div4);
-    			mount_component(mathinput, div4, null);
-    			append(div5, t11);
-    			mount_component(mathbuttonpanel, div5, null);
+    			append(main, div8);
+    			append(div8, div7);
+    			append(div7, div5);
+    			mount_component(mathinputtexrender, div5, null);
+    			append(div7, t10);
+    			append(div7, div6);
+    			mount_component(mathinput, div6, null);
+    			append(div7, t11);
+    			mount_component(mathbuttonpanel, div7, null);
     			current = true;
     		},
 
     		p: function update(changed, ctx) {
+    			var solutiondisplay_changes = {};
+    			if (changed.$$scope) solutiondisplay_changes.$$scope = { changed, ctx };
+    			solutiondisplay.$set(solutiondisplay_changes);
+
     			var mathinputtexrender_changes = {};
     			if (changed.$$scope) mathinputtexrender_changes.$$scope = { changed, ctx };
     			mathinputtexrender.$set(mathinputtexrender_changes);

@@ -22,7 +22,6 @@
                 }
             })
             .then(() => {
-                console.warn('expression', $mathExpressionStore.parsed, $mathVariableStore);
                 mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore);
             })
             .catch(e => console.error('Error creating chaos...', {e}))
@@ -52,9 +51,18 @@
     </section>
 
     <section class="variable-panel">
-        <MathButton tex={'x'}  on:click={applyTransform(CALC_OPERATION.X)}/>
-        <MathButton tex={'y'}   on:click={applyTransform(CALC_OPERATION.Y)}/>
-        <MathButton tex={'z'}   on:click={applyTransform(CALC_OPERATION.Z)}/>
+        <MathButton tex={'x'}  on:click={() => {
+            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.X]);
+            mathVariableStore.add('x');
+        }}/>
+        <MathButton tex={'y'}   on:click={ () => {
+            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Y]);
+            mathVariableStore.add('y');
+        } }/>
+        <MathButton tex={'z'}   on:click={ () => {
+            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Z]);
+            mathVariableStore.add('z');
+        } }/>
     </section>
 
     <section class="constant-panel">
