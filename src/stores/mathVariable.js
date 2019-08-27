@@ -13,16 +13,16 @@ export const mathVariableStore = {
         console.warn('adding', { name });
 
         update(state => ({
+            [name]: '',
             ...state,
-            [name]: ''
         }));
     },
 
     set(name, value) {
 
-        if (typeof value !== 'number' || isNaN(value)) {
-            throw new TypeError(`Cannot use non numeric value ${value} for variable ${name}`);
-        }
+        // if (typeof value !== 'number' || isNaN(value)) {
+        // throw new TypeError(`Cannot use non numeric value ${value} for variable ${name}`);
+        // }
 
         update(state => ({
             ...state,

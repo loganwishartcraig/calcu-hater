@@ -7,13 +7,7 @@
     export let value = ''
 
     function handleChange(evt) {
-
-        const parsed = parseFloat(value);
-
-        if (!isNaN(parsed)) {
-            mathVariableStore.set(name, parsed);
-        }
-
+        mathVariableStore.set(name, evt.target.value);
     }
 
     function handleClearClick(evt) {

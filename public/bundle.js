@@ -665,16 +665,16 @@ var app = (function () {
             console.warn('adding', { name });
 
             update$2(state => ({
+                [name]: '',
                 ...state,
-                [name]: ''
             }));
         },
 
         set(name, value) {
 
-            if (typeof value !== 'number' || isNaN(value)) {
-                throw new TypeError(`Cannot use non numeric value ${value} for variable ${name}`);
-            }
+            // if (typeof value !== 'number' || isNaN(value)) {
+            // throw new TypeError(`Cannot use non numeric value ${value} for variable ${name}`);
+            // }
 
             update$2(state => ({
                 ...state,
@@ -80088,16 +80088,16 @@ var app = (function () {
     			button.textContent = "x";
     			attr(label, "for", ctx.inputId);
     			attr(label, "class", "whitespace-no-wrap mr-1");
-    			add_location(label, file$4, 29, 4, 571);
+    			add_location(label, file$4, 23, 4, 492);
     			attr(input, "id", ctx.inputId);
     			attr(input, "type", "text");
     			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
-    			add_location(input, file$4, 32, 4, 677);
+    			add_location(input, file$4, 26, 4, 598);
     			attr(button, "type", "button");
     			attr(button, "class", "px-2 py-1");
-    			add_location(button, file$4, 33, 4, 793);
+    			add_location(button, file$4, 27, 4, 714);
     			attr(li, "class", "flex max-w-full items-center");
-    			add_location(li, file$4, 28, 0, 525);
+    			add_location(li, file$4, 22, 0, 446);
 
     			dispose = [
     				listen(input, "input", ctx.input_input_handler),
@@ -80170,13 +80170,7 @@ var app = (function () {
         let { name, value = '' } = $$props;
 
         function handleChange(evt) {
-
-            const parsed = parseFloat(value);
-
-            if (!isNaN(parsed)) {
-                mathVariableStore.set(name, parsed);
-            }
-
+            mathVariableStore.set(name, evt.target.value);
         }
 
         function handleClearClick(evt) {
@@ -80562,62 +80556,133 @@ var app = (function () {
 
     const file$8 = "src/components/SolutionDisplay/SolutionDisplay.svelte";
 
-    const get_default_slot_changes = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore });
-    const get_default_slot_context = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore.error });
+    const get_waiting_slot_changes$1 = () => ({});
+    const get_waiting_slot_context$1 = () => ({});
 
-    // (12:54) 
-    function create_if_block_1$1(ctx) {
-    	var current;
+    const get_error_slot_changes$1 = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore });
+    const get_error_slot_context$1 = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore.error });
 
-    	const default_slot_template = ctx.$$slots.default;
-    	const default_slot = create_slot(default_slot_template, ctx, get_default_slot_context);
+    // (14:0) {:else}
+    function create_else_block$1(ctx) {
+    	var span, current;
+
+    	const waiting_slot_template = ctx.$$slots.waiting;
+    	const waiting_slot = create_slot(waiting_slot_template, ctx, get_waiting_slot_context$1);
 
     	return {
     		c: function create() {
-    			if (default_slot) default_slot.c();
+    			if (!waiting_slot) {
+    				span = element("span");
+    				span.textContent = "Waiting...";
+    			}
+
+    			if (waiting_slot) waiting_slot.c();
+    			if (!waiting_slot) {
+    				add_location(span, file$8, 14, 25, 330);
+    			}
     		},
 
     		l: function claim(nodes) {
-    			if (default_slot) default_slot.l(nodes);
+    			if (waiting_slot) waiting_slot.l(nodes);
     		},
 
     		m: function mount(target, anchor) {
-    			if (default_slot) {
-    				default_slot.m(target, anchor);
+    			if (!waiting_slot) {
+    				insert(target, span, anchor);
+    			}
+
+    			else {
+    				waiting_slot.m(target, anchor);
     			}
 
     			current = true;
     		},
 
     		p: function update(changed, ctx) {
-    			if (default_slot && default_slot.p && (changed.$$scope || changed.$mathSolutionStore)) {
-    				default_slot.p(
-    					get_slot_changes(default_slot_template, ctx, changed, get_default_slot_changes),
-    					get_slot_context(default_slot_template, ctx, get_default_slot_context)
+    			if (waiting_slot && waiting_slot.p && changed.$$scope) {
+    				waiting_slot.p(
+    					get_slot_changes(waiting_slot_template, ctx, changed, get_waiting_slot_changes$1),
+    					get_slot_context(waiting_slot_template, ctx, get_waiting_slot_context$1)
     				);
     			}
     		},
 
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(default_slot, local);
+    			transition_in(waiting_slot, local);
     			current = true;
     		},
 
     		o: function outro(local) {
-    			transition_out(default_slot, local);
+    			transition_out(waiting_slot, local);
     			current = false;
     		},
 
     		d: function destroy(detaching) {
-    			if (default_slot) default_slot.d(detaching);
+    			if (!waiting_slot) {
+    				if (detaching) {
+    					detach(span);
+    				}
+    			}
+
+    			if (waiting_slot) waiting_slot.d(detaching);
+    		}
+    	};
+    }
+
+    // (12:54) 
+    function create_if_block_1$1(ctx) {
+    	var current;
+
+    	const error_slot_template = ctx.$$slots.error;
+    	const error_slot = create_slot(error_slot_template, ctx, get_error_slot_context$1);
+
+    	return {
+    		c: function create() {
+    			if (error_slot) error_slot.c();
+    		},
+
+    		l: function claim(nodes) {
+    			if (error_slot) error_slot.l(nodes);
+    		},
+
+    		m: function mount(target, anchor) {
+    			if (error_slot) {
+    				error_slot.m(target, anchor);
+    			}
+
+    			current = true;
+    		},
+
+    		p: function update(changed, ctx) {
+    			if (error_slot && error_slot.p && (changed.$$scope || changed.$mathSolutionStore)) {
+    				error_slot.p(
+    					get_slot_changes(error_slot_template, ctx, changed, get_error_slot_changes$1),
+    					get_slot_context(error_slot_template, ctx, get_error_slot_context$1)
+    				);
+    			}
+    		},
+
+    		i: function intro(local) {
+    			if (current) return;
+    			transition_in(error_slot, local);
+    			current = true;
+    		},
+
+    		o: function outro(local) {
+    			transition_out(error_slot, local);
+    			current = false;
+    		},
+
+    		d: function destroy(detaching) {
+    			if (error_slot) error_slot.d(detaching);
     		}
     	};
     }
 
     // (10:0) {#if typeof $mathSolutionStore.solution === 'number'}
     function create_if_block$2(ctx) {
-    	var span, t_value = ctx.$mathSolutionStore.solution || 'Waiting...', t;
+    	var span, t_value = ctx.$mathSolutionStore.solution, t;
 
     	return {
     		c: function create() {
@@ -80632,7 +80697,7 @@ var app = (function () {
     		},
 
     		p: function update(changed, ctx) {
-    			if ((changed.$mathSolutionStore) && t_value !== (t_value = ctx.$mathSolutionStore.solution || 'Waiting...')) {
+    			if ((changed.$mathSolutionStore) && t_value !== (t_value = ctx.$mathSolutionStore.solution)) {
     				set_data(t, t_value);
     			}
     		},
@@ -80653,7 +80718,8 @@ var app = (function () {
 
     	var if_block_creators = [
     		create_if_block$2,
-    		create_if_block_1$1
+    		create_if_block_1$1,
+    		create_else_block$1
     	];
 
     	var if_blocks = [];
@@ -80661,16 +80727,15 @@ var app = (function () {
     	function select_block_type(ctx) {
     		if (typeof ctx.$mathSolutionStore.solution === 'number') return 0;
     		if (typeof mathSolutionStore.error === 'string') return 1;
-    		return -1;
+    		return 2;
     	}
 
-    	if (~(current_block_type_index = select_block_type(ctx))) {
-    		if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
-    	}
+    	current_block_type_index = select_block_type(ctx);
+    	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
 
     	return {
     		c: function create() {
-    			if (if_block) if_block.c();
+    			if_block.c();
     			if_block_anchor = empty();
     		},
 
@@ -80679,7 +80744,7 @@ var app = (function () {
     		},
 
     		m: function mount(target, anchor) {
-    			if (~current_block_type_index) if_blocks[current_block_type_index].m(target, anchor);
+    			if_blocks[current_block_type_index].m(target, anchor);
     			insert(target, if_block_anchor, anchor);
     			current = true;
     		},
@@ -80688,27 +80753,21 @@ var app = (function () {
     			var previous_block_index = current_block_type_index;
     			current_block_type_index = select_block_type(ctx);
     			if (current_block_type_index === previous_block_index) {
-    				if (~current_block_type_index) if_blocks[current_block_type_index].p(changed, ctx);
+    				if_blocks[current_block_type_index].p(changed, ctx);
     			} else {
-    				if (if_block) {
-    					group_outros();
-    					transition_out(if_blocks[previous_block_index], 1, 1, () => {
-    						if_blocks[previous_block_index] = null;
-    					});
-    					check_outros();
-    				}
+    				group_outros();
+    				transition_out(if_blocks[previous_block_index], 1, 1, () => {
+    					if_blocks[previous_block_index] = null;
+    				});
+    				check_outros();
 
-    				if (~current_block_type_index) {
-    					if_block = if_blocks[current_block_type_index];
-    					if (!if_block) {
-    						if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
-    						if_block.c();
-    					}
-    					transition_in(if_block, 1);
-    					if_block.m(if_block_anchor.parentNode, if_block_anchor);
-    				} else {
-    					if_block = null;
+    				if_block = if_blocks[current_block_type_index];
+    				if (!if_block) {
+    					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    					if_block.c();
     				}
+    				transition_in(if_block, 1);
+    				if_block.m(if_block_anchor.parentNode, if_block_anchor);
     			}
     		},
 
@@ -80724,7 +80783,7 @@ var app = (function () {
     		},
 
     		d: function destroy(detaching) {
-    			if (~current_block_type_index) if_blocks[current_block_type_index].d(detaching);
+    			if_blocks[current_block_type_index].d(detaching);
 
     			if (detaching) {
     				detach(if_block_anchor);
