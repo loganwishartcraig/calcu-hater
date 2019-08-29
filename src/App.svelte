@@ -1,14 +1,13 @@
 <script>
 
-	// import { mathExpressionStore } from './stores';
 	import MathInput from './components/MathInput/MathInput.svelte';
-	// import MathTexRenderer from './components/MathTexRenderer/MathTexRenderer.svelte';
 	import MathInputTexRender from './components/MathInputTexRender/MathInputTexRender.svelte';
 	import MathButtonPanel from './components/MathButtonPanel/MathButtonPanel.svelte';
 	import VariableList from './components/VariableList/VariableList.svelte';
 	import VariableAddForm from './components/VariableAddForm/VariableAddForm.svelte';
 	import InsultDisplay from './components/InsultDisplay/InsultDisplay.svelte';
 	import SolutionDisplay from './components/SolutionDisplay/SolutionDisplay.svelte';
+	import HistoryList from './components/HistoryList/HistoryList.svelte';
 
 </script>
 
@@ -16,7 +15,7 @@
 <main class="app-container">
 
 	<div class="history-container">
-		[[HISTORY]]
+		<HistoryList />
 	</div>
 
 	<div class="solution-container flex items-center justify-center text-5xl text-center">

@@ -21,9 +21,8 @@
                         console.error('Unknown chaos type')
                 }
             })
-            .then(() => {
-                mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore);
-            })
+            .then(() => mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore))
+            .then(() => {mathInputStore.clear()})
             .catch(e => console.error('Error creating chaos...', {e}))
     }
 
