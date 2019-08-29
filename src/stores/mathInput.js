@@ -31,6 +31,10 @@ export const mathInputStore = {
     },
 
     setValue(value, selectionRangeStart, selectionRangeEnd) {
+
+        selectionRangeEnd = (typeof selectionRangeEnd === 'number') ? selectionRangeEnd : value.length;
+        selectionRangeStart = (typeof selectionRangeStart === 'number') ? selectionRangeStart : selectionRangeEnd;
+
         update(state => ({
             ...state,
             value,

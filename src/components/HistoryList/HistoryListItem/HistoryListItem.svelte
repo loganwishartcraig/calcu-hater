@@ -5,4 +5,4 @@
 </script>
 
 
-<li class="history-list__item">{value}</li>
+<li class="history-list__item" on:click>{value}</li>

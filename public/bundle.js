@@ -575,6 +575,10 @@ var app = (function () {
         },
 
         setValue(value, selectionRangeStart, selectionRangeEnd) {
+
+            selectionRangeEnd = (typeof selectionRangeEnd === 'number') ? selectionRangeEnd : value.length;
+            selectionRangeStart = (typeof selectionRangeStart === 'number') ? selectionRangeStart : selectionRangeEnd;
+
             update$1(state => ({
                 ...state,
                 value,
@@ -80935,7 +80939,7 @@ var app = (function () {
     const file$9 = "src/components/HistoryList/HistoryListItem/HistoryListItem.svelte";
 
     function create_fragment$b(ctx) {
-    	var li, t;
+    	var li, t, dispose;
 
     	return {
     		c: function create() {
@@ -80943,6 +80947,7 @@ var app = (function () {
     			t = text(ctx.value);
     			attr(li, "class", "history-list__item");
     			add_location(li, file$9, 7, 0, 45);
+    			dispose = listen(li, "click", ctx.click_handler);
     		},
 
     		l: function claim(nodes) {
@@ -80967,6 +80972,8 @@ var app = (function () {
     			if (detaching) {
     				detach(li);
     			}
+
+    			dispose();
     		}
     	};
     }
@@ -80979,11 +80986,15 @@ var app = (function () {
     		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<HistoryListItem> was created with unknown prop '${key}'`);
     	});
 
+    	function click_handler(event) {
+    		bubble($$self, event);
+    	}
+
     	$$self.$set = $$props => {
     		if ('value' in $$props) $$invalidate('value', value = $$props.value);
     	};
 
-    	return { value };
+    	return { value, click_handler };
     }
 
     class HistoryListItem extends SvelteComponentDev {
@@ -81017,14 +81028,19 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (12:4) {#each $mathSolutionStore.history.slice($mathSolutionStore.history.length - showCount, showCount) as item (item.id)}
+    // (16:4) {#each $mathSolutionStore.history.slice($mathSolutionStore.history.length - showCount, showCount) as item (item.id)}
     function create_each_block$1(key_1, ctx) {
     	var first, current;
+
+    	function click_handler() {
+    		return ctx.click_handler(ctx);
+    	}
 
     	var historylistitem = new HistoryListItem({
     		props: { value: ctx.item.solution },
     		$$inline: true
     	});
+    	historylistitem.$on("click", click_handler);
 
     	return {
     		key: key_1,
@@ -81043,7 +81059,8 @@ var app = (function () {
     			current = true;
     		},
 
-    		p: function update(changed, ctx) {
+    		p: function update(changed, new_ctx) {
+    			ctx = new_ctx;
     			var historylistitem_changes = {};
     			if (changed.$mathSolutionStore || changed.showCount) historylistitem_changes.value = ctx.item.solution;
     			historylistitem.$set(historylistitem_changes);
@@ -81090,7 +81107,7 @@ var app = (function () {
 
     			for (i = 0; i < each_blocks.length; i += 1) each_blocks[i].c();
     			attr(ul, "class", "history-list");
-    			add_location(ul, file$a, 10, 0, 182);
+    			add_location(ul, file$a, 14, 0, 301);
     		},
 
     		l: function claim(nodes) {
@@ -81136,6 +81153,10 @@ var app = (function () {
     	};
     }
 
+    function handleItemClick(item) {
+        mathInputStore.setValue(item.solution.toString());
+    }
+
     function instance$c($$self, $$props, $$invalidate) {
     	let $mathSolutionStore;
 
@@ -81151,11 +81172,19 @@ var app = (function () {
     		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<HistoryList> was created with unknown prop '${key}'`);
     	});
 
+    	function click_handler({ item }) {
+    		return handleItemClick(item);
+    	}
+
     	$$self.$set = $$props => {
     		if ('showCount' in $$props) $$invalidate('showCount', showCount = $$props.showCount);
     	};
 
-    	return { showCount, $mathSolutionStore };
+    	return {
+    		showCount,
+    		$mathSolutionStore,
+    		click_handler
+    	};
     }
 
     class HistoryList extends SvelteComponentDev {
