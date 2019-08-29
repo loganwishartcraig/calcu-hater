@@ -654,11 +654,15 @@ var app = (function () {
 
     const initialState$1 = {};
 
-    const { set: set$1, subscribe: subscribe$2, update: update$2 } = writable(initialState$1);
+    const { set: set$1, subscribe: subscribe$2, update: update$2 } = writable({ ...initialState$1 });
 
     const mathVariableStore = {
 
         subscribe: subscribe$2,
+
+        clearAll() {
+            set$1({ ...initialState$1 });
+        },
 
         add(name) {
 
@@ -80415,28 +80419,35 @@ var app = (function () {
     const file$6 = "src/components/VariableAddForm/VariableAddForm.svelte";
 
     function create_fragment$8(ctx) {
-    	var form, input, t0, button, t1, button_disabled_value, dispose;
+    	var form, input, t0, button0, t1, button0_disabled_value, t2, button1, dispose;
 
     	return {
     		c: function create() {
     			form = element("form");
     			input = element("input");
     			t0 = space();
-    			button = element("button");
+    			button0 = element("button");
     			t1 = text("+");
+    			t2 = space();
+    			button1 = element("button");
+    			button1.textContent = "clr";
     			attr(input, "type", "text");
     			attr(input, "maxlength", "1");
     			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
-    			add_location(input, file$6, 18, 4, 332);
-    			attr(button, "type", "submit");
-    			button.disabled = button_disabled_value = !ctx.value;
-    			attr(button, "class", "px-2");
-    			add_location(button, file$6, 19, 4, 423);
+    			add_location(input, file$6, 21, 4, 413);
+    			attr(button0, "type", "submit");
+    			button0.disabled = button0_disabled_value = !ctx.value;
+    			attr(button0, "class", "px-2 mr-1");
+    			add_location(button0, file$6, 22, 4, 504);
+    			attr(button1, "type", "button");
+    			attr(button1, "class", "px-2");
+    			add_location(button1, file$6, 23, 4, 577);
     			attr(form, "class", "flex max-w-full");
-    			add_location(form, file$6, 17, 0, 257);
+    			add_location(form, file$6, 20, 0, 338);
 
     			dispose = [
     				listen(input, "input", ctx.input_input_handler),
+    				listen(button1, "click", handleClearClick$1),
     				listen(form, "submit", prevent_default(ctx.handleSubmit))
     			];
     		},
@@ -80452,15 +80463,17 @@ var app = (function () {
     			input.value = ctx.value;
 
     			append(form, t0);
-    			append(form, button);
-    			append(button, t1);
+    			append(form, button0);
+    			append(button0, t1);
+    			append(form, t2);
+    			append(form, button1);
     		},
 
     		p: function update(changed, ctx) {
     			if (changed.value && (input.value !== ctx.value)) input.value = ctx.value;
 
-    			if ((changed.value) && button_disabled_value !== (button_disabled_value = !ctx.value)) {
-    				button.disabled = button_disabled_value;
+    			if ((changed.value) && button0_disabled_value !== (button0_disabled_value = !ctx.value)) {
+    				button0.disabled = button0_disabled_value;
     			}
     		},
 
@@ -80475,6 +80488,10 @@ var app = (function () {
     			run_all(dispose);
     		}
     	};
+    }
+
+    function handleClearClick$1(evt) {
+        mathVariableStore.clearAll();
     }
 
     function instance$8($$self, $$props, $$invalidate) {

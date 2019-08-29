@@ -2,11 +2,15 @@ import { writable } from 'svelte/store';
 
 const initialState = {};
 
-const { set, subscribe, update } = writable(initialState);
+const { set, subscribe, update } = writable({ ...initialState });
 
 export const mathVariableStore = {
 
     subscribe,
+
+    clearAll() {
+        set({ ...initialState });
+    },
 
     add(name) {
 
