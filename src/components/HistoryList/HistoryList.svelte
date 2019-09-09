@@ -13,7 +13,7 @@
 
 
 <ul class="history-list">
-    {#each $mathSolutionStore.history.slice($mathSolutionStore.history.length - showCount, showCount) as item (item.id)}
+    {#each $mathSolutionStore.history as item (item.id)}
         <HistoryListItem value={item.solution} on:click={() => handleItemClick(item)}/>
     {/each}
 </ul>

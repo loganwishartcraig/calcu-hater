@@ -15,6 +15,7 @@
 <main class="app-container">
 
 	<div class="history-container">
+		<h3 class="font-bold text-center p-1 border-b border-gray-400">History</h3>
 		<HistoryList />
 	</div>
 
@@ -30,9 +31,8 @@
 	</div>
 
 	<div class="variable-container">
-		<heading>Define Variable</heading>
+		<h3 class="font-bold text-center p-1 border-b border-gray-400">Variables</h3>
 		<VariableAddForm />
-		<heading>Variables:</heading>
 		<VariableList />
 	</div>
 

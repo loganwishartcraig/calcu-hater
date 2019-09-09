@@ -5,4 +5,4 @@
 </script>
 
 
-<li class="history-list__item" on:click>{value}</li>
+<li class="history-list__item italic p-1 bg-gray-100 border-b border-gray-400" on:click>{value}</li>

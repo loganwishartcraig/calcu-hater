@@ -61457,13 +61457,17 @@ var app = (function () {
             return new Promise((res, rej) => {
                 try {
 
+
                     const solution = parsed.compile().evaluate({ ...scope });
                     console.log('solved', { solution });
-                    update$3(state => ({
-                        history: [...state.history, { id: Date.now().toString(), solution }],
-                        solution,
-                        error: '',
-                    }));
+                    update$3(state => {
+                        console.warn(state);
+                        return ({
+                            history: [...state.history, { id: Date.now().toString(), solution }],
+                            solution,
+                            error: '',
+                        })
+                    });
 
                     res();
 
@@ -78789,8 +78793,8 @@ var app = (function () {
     };
 
     const defaultWeights = {
-        [ChaosType.INSULT]: 0.8,
-        [ChaosType.OPEN_LINK]: 0.2,
+        [ChaosType.INSULT]: 1,
+        [ChaosType.OPEN_LINK]: 0
     };
 
     class ChaosService {
@@ -80945,7 +80949,7 @@ var app = (function () {
     		c: function create() {
     			li = element("li");
     			t = text(ctx.value);
-    			attr(li, "class", "history-list__item");
+    			attr(li, "class", "history-list__item italic p-1 bg-gray-100 border-b border-gray-400");
     			add_location(li, file$9, 7, 0, 45);
     			dispose = listen(li, "click", ctx.click_handler);
     		},
@@ -81028,7 +81032,7 @@ var app = (function () {
     	return child_ctx;
     }
 
-    // (16:4) {#each $mathSolutionStore.history.slice($mathSolutionStore.history.length - showCount, showCount) as item (item.id)}
+    // (16:4) {#each $mathSolutionStore.history as item (item.id)}
     function create_each_block$1(key_1, ctx) {
     	var first, current;
 
@@ -81062,7 +81066,7 @@ var app = (function () {
     		p: function update(changed, new_ctx) {
     			ctx = new_ctx;
     			var historylistitem_changes = {};
-    			if (changed.$mathSolutionStore || changed.showCount) historylistitem_changes.value = ctx.item.solution;
+    			if (changed.$mathSolutionStore) historylistitem_changes.value = ctx.item.solution;
     			historylistitem.$set(historylistitem_changes);
     		},
 
@@ -81091,7 +81095,7 @@ var app = (function () {
     function create_fragment$c(ctx) {
     	var ul, each_blocks = [], each_1_lookup = new Map(), current;
 
-    	var each_value = ctx.$mathSolutionStore.history.slice(ctx.$mathSolutionStore.history.length - ctx.showCount, ctx.showCount);
+    	var each_value = ctx.$mathSolutionStore.history;
 
     	const get_key = ctx => ctx.item.id;
 
@@ -81123,7 +81127,7 @@ var app = (function () {
     		},
 
     		p: function update(changed, ctx) {
-    			const each_value = ctx.$mathSolutionStore.history.slice(ctx.$mathSolutionStore.history.length - ctx.showCount, ctx.showCount);
+    			const each_value = ctx.$mathSolutionStore.history;
 
     			group_outros();
     			each_blocks = update_keyed_each(each_blocks, changed, get_key, 1, ctx, each_value, each_1_lookup, ul, outro_and_destroy_block, create_each_block$1, null, get_each_context$1);
@@ -81206,7 +81210,7 @@ var app = (function () {
 
     const file$b = "src/App.svelte";
 
-    // (26:4) <span slot="pre">
+    // (27:4) <span slot="pre">
     function create_pre_slot(ctx) {
     	var span;
 
@@ -81215,7 +81219,7 @@ var app = (function () {
     			span = element("span");
     			span.textContent = "Ans:";
     			attr(span, "slot", "pre");
-    			add_location(span, file$b, 25, 4, 926);
+    			add_location(span, file$b, 26, 4, 1004);
     		},
 
     		m: function mount(target, anchor) {
@@ -81230,7 +81234,7 @@ var app = (function () {
     	};
     }
 
-    // (25:3) <SolutionDisplay classList="text-blue-500">
+    // (26:3) <SolutionDisplay classList="text-blue-500">
     function create_default_slot_1(ctx) {
     	return {
     		c: noop,
@@ -81251,9 +81255,9 @@ var app = (function () {
     			t0 = text("Whoa bud. ");
     			t1 = text(t1_value);
     			attr(span, "class", "text-red-500");
-    			add_location(span, file$b, 42, 23, 1340);
+    			add_location(span, file$b, 42, 23, 1429);
     			attr(div, "slot", "error");
-    			add_location(div, file$b, 42, 5, 1322);
+    			add_location(div, file$b, 42, 5, 1411);
     		},
 
     		m: function mount(target, anchor) {
@@ -81286,10 +81290,10 @@ var app = (function () {
     			div = element("div");
     			i = element("i");
     			i.textContent = "Well...?";
-    			add_location(i, file$b, 43, 42, 1440);
+    			add_location(i, file$b, 43, 42, 1529);
     			attr(div, "slot", "waiting");
     			attr(div, "class", "text-3xl");
-    			add_location(div, file$b, 43, 5, 1403);
+    			add_location(div, file$b, 43, 5, 1492);
     		},
 
     		m: function mount(target, anchor) {
@@ -81329,7 +81333,7 @@ var app = (function () {
     }
 
     function create_fragment$d(ctx) {
-    	var main, div0, t0, div3, div2, t1, div1, t2, div4, heading0, t4, t5, heading1, t7, t8, div8, div7, div5, t9, div6, t10, current;
+    	var main, div0, h30, t1, t2, div3, div2, t3, div1, t4, div4, h31, t6, t7, t8, div8, div7, div5, t9, div6, t10, current;
 
     	var historylist = new HistoryList({ $$inline: true });
 
@@ -81375,23 +81379,23 @@ var app = (function () {
     		c: function create() {
     			main = element("main");
     			div0 = element("div");
+    			h30 = element("h3");
+    			h30.textContent = "History";
+    			t1 = space();
     			historylist.$$.fragment.c();
-    			t0 = space();
+    			t2 = space();
     			div3 = element("div");
     			div2 = element("div");
     			insultdisplay.$$.fragment.c();
-    			t1 = space();
+    			t3 = space();
     			div1 = element("div");
     			solutiondisplay.$$.fragment.c();
-    			t2 = space();
-    			div4 = element("div");
-    			heading0 = element("heading");
-    			heading0.textContent = "Define Variable";
     			t4 = space();
+    			div4 = element("div");
+    			h31 = element("h3");
+    			h31.textContent = "Variables";
+    			t6 = space();
     			variableaddform.$$.fragment.c();
-    			t5 = space();
-    			heading1 = element("heading");
-    			heading1.textContent = "Variables:";
     			t7 = space();
     			variablelist.$$.fragment.c();
     			t8 = space();
@@ -81404,24 +81408,26 @@ var app = (function () {
     			mathinput.$$.fragment.c();
     			t10 = space();
     			mathbuttonpanel.$$.fragment.c();
+    			attr(h30, "class", "font-bold text-center p-1 border-b border-gray-400");
+    			add_location(h30, file$b, 17, 2, 724);
     			attr(div0, "class", "history-container");
     			add_location(div0, file$b, 16, 1, 690);
-    			add_location(div1, file$b, 23, 3, 869);
-    			add_location(div2, file$b, 21, 2, 839);
+    			add_location(div1, file$b, 24, 3, 947);
+    			add_location(div2, file$b, 22, 2, 917);
     			attr(div3, "class", "solution-container flex items-center justify-center text-5xl text-center");
-    			add_location(div3, file$b, 20, 1, 750);
-    			add_location(heading0, file$b, 32, 2, 1042);
-    			add_location(heading1, file$b, 34, 2, 1101);
+    			add_location(div3, file$b, 21, 1, 828);
+    			attr(h31, "class", "font-bold text-center p-1 border-b border-gray-400");
+    			add_location(h31, file$b, 33, 2, 1120);
     			attr(div4, "class", "variable-container");
-    			add_location(div4, file$b, 31, 1, 1007);
+    			add_location(div4, file$b, 32, 1, 1085);
     			attr(div5, "class", "mb-2 text-center");
-    			add_location(div5, file$b, 40, 3, 1230);
+    			add_location(div5, file$b, 40, 3, 1319);
     			attr(div6, "class", "mb-2");
-    			add_location(div6, file$b, 46, 3, 1501);
+    			add_location(div6, file$b, 46, 3, 1590);
     			attr(div7, "class", "flex flex-col h-full");
-    			add_location(div7, file$b, 39, 2, 1192);
+    			add_location(div7, file$b, 39, 2, 1281);
     			attr(div8, "class", "input-container");
-    			add_location(div8, file$b, 38, 1, 1160);
+    			add_location(div8, file$b, 38, 1, 1249);
     			attr(main, "class", "app-container");
     			add_location(main, file$b, 14, 0, 659);
     		},
@@ -81433,21 +81439,21 @@ var app = (function () {
     		m: function mount(target, anchor) {
     			insert(target, main, anchor);
     			append(main, div0);
+    			append(div0, h30);
+    			append(div0, t1);
     			mount_component(historylist, div0, null);
-    			append(main, t0);
+    			append(main, t2);
     			append(main, div3);
     			append(div3, div2);
     			mount_component(insultdisplay, div2, null);
-    			append(div2, t1);
+    			append(div2, t3);
     			append(div2, div1);
     			mount_component(solutiondisplay, div1, null);
-    			append(main, t2);
+    			append(main, t4);
     			append(main, div4);
-    			append(div4, heading0);
-    			append(div4, t4);
+    			append(div4, h31);
+    			append(div4, t6);
     			mount_component(variableaddform, div4, null);
-    			append(div4, t5);
-    			append(div4, heading1);
     			append(div4, t7);
     			mount_component(variablelist, div4, null);
     			append(main, t8);

@@ -7,8 +7,8 @@ export const ChaosType = {
 }
 
 const defaultWeights = {
-    [ChaosType.INSULT]: 0.8,
-    [ChaosType.OPEN_LINK]: 0.2,
+    [ChaosType.INSULT]: 1,
+    [ChaosType.OPEN_LINK]: 0
 };
 
 export class ChaosService {

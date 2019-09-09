@@ -16,13 +16,17 @@ export const mathSolutionStore = {
         return new Promise((res, rej) => {
             try {
 
+
                 const solution = parsed.compile().evaluate({ ...scope });
                 console.log('solved', { solution });
-                update(state => ({
-                    history: [...state.history, { id: Date.now().toString(), solution }],
-                    solution,
-                    error: '',
-                }));
+                update(state => {
+                    console.warn(state);
+                    return ({
+                        history: [...state.history, { id: Date.now().toString(), solution }],
+                        solution,
+                        error: '',
+                    })
+                });
 
                 res();
 
