@@ -16,10 +16,20 @@ export const mathVariableStore = {
 
         console.warn('adding', { name });
 
-        update(state => ({
-            [name]: '',
-            ...state,
-        }));
+
+
+        update(state => {
+
+            if (state.hasOwnProperty(name)) {
+                return state;
+            }
+
+            return {
+                [name]: '',
+                ...state,
+            }
+
+        });
     },
 
     set(name, value) {

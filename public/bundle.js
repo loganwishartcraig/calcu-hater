@@ -672,10 +672,20 @@ var app = (function () {
 
             console.warn('adding', { name });
 
-            update$2(state => ({
-                [name]: '',
-                ...state,
-            }));
+
+
+            update$2(state => {
+
+                if (state.hasOwnProperty(name)) {
+                    return state;
+                }
+
+                return {
+                    [name]: '',
+                    ...state,
+                }
+
+            });
         },
 
         set(name, value) {
@@ -80124,17 +80134,17 @@ var app = (function () {
     			button = element("button");
     			button.textContent = "x";
     			attr(label, "for", ctx.inputId);
-    			attr(label, "class", "whitespace-no-wrap mr-1");
-    			add_location(label, file$4, 23, 4, 492);
+    			attr(label, "class", "whitespace-no-wrap w-10 text-center bg-gray-100 pt-1");
+    			add_location(label, file$4, 23, 4, 511);
     			attr(input, "id", ctx.inputId);
     			attr(input, "type", "text");
-    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
-    			add_location(input, file$4, 26, 4, 598);
+    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-0 border-l");
+    			add_location(input, file$4, 26, 4, 646);
     			attr(button, "type", "button");
     			attr(button, "class", "px-2 py-1");
-    			add_location(button, file$4, 27, 4, 714);
-    			attr(li, "class", "flex max-w-full items-center");
-    			add_location(li, file$4, 22, 0, 446);
+    			add_location(button, file$4, 27, 4, 780);
+    			attr(li, "class", "flex items-stretch max-w-full items-center border-b");
+    			add_location(li, file$4, 22, 0, 442);
 
     			dispose = [
     				listen(input, "input", ctx.input_input_handler),
@@ -80232,7 +80242,7 @@ var app = (function () {
     	let tex, inputId;
 
     	$$self.$$.update = ($$dirty = { name: 1 }) => {
-    		if ($$dirty.name) { $$invalidate('tex', tex = `${name} := `); }
+    		if ($$dirty.name) { $$invalidate('tex', tex = `${name}`); }
     		if ($$dirty.name) { $$invalidate('inputId', inputId = `var_${name}`); }
     	};
 
@@ -80442,15 +80452,15 @@ var app = (function () {
     			attr(input, "type", "text");
     			attr(input, "maxlength", "1");
     			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
-    			add_location(input, file$6, 21, 4, 413);
+    			add_location(input, file$6, 21, 4, 443);
     			attr(button0, "type", "submit");
     			button0.disabled = button0_disabled_value = !ctx.value;
     			attr(button0, "class", "px-2 mr-1");
-    			add_location(button0, file$6, 22, 4, 504);
+    			add_location(button0, file$6, 22, 4, 534);
     			attr(button1, "type", "button");
     			attr(button1, "class", "px-2");
-    			add_location(button1, file$6, 23, 4, 577);
-    			attr(form, "class", "flex max-w-full");
+    			add_location(button1, file$6, 23, 4, 607);
+    			attr(form, "class", "flex max-w-full py-2 border-b border-gray-400");
     			add_location(form, file$6, 20, 0, 338);
 
     			dispose = [
