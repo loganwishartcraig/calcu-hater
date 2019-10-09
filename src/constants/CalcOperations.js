@@ -37,9 +37,8 @@ const CALC_OPERATION = {
     TANH: 'TANH',
     ABS: 'ABS',
     LOG: 'LOG',
-    LN: 'LN',
     LG: 'LG',
-    LOG_BASE_A: 'LOG_BASE_A',
+    LOG_BASE_B: 'LOG_BASE_B',
     I: 'I',
     CLEAR: 'CLEAR',
 }

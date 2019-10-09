@@ -79192,9 +79192,8 @@ var app = (function () {
         TANH: 'TANH',
         ABS: 'ABS',
         LOG: 'LOG',
-        LN: 'LN',
         LG: 'LG',
-        LOG_BASE_A: 'LOG_BASE_A',
+        LOG_BASE_B: 'LOG_BASE_B',
         I: 'I',
         CLEAR: 'CLEAR',
     };
@@ -79240,9 +79239,8 @@ var app = (function () {
         [CALC_OPERATION.TANH]: ({ selection }) => `tanh(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.ABS]: ({ selection }) => `abs(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.LOG]: ({ selection }) => `log(${wrapSelection(selection, '', ')')}`,
-        [CALC_OPERATION.LN]: ({ selection }) => `ln(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.LG]: ({ selection }) => `log_2(${wrapSelection(selection, '', ')')}`,
-        [CALC_OPERATION.LOG_BASE_A]: ({ selection }) => `log_a(${wrapSelection(selection, '', ')')}`,
+        [CALC_OPERATION.LOG_BASE_B]: ({ selection }) => `log_b(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.I]: () => ' i ',
     };
 
@@ -79252,7 +79250,7 @@ var app = (function () {
     const file$3 = "src/components/MathButtonPanel/MathButtonPanel.svelte";
 
     function create_fragment$5(ctx) {
-    	var div, section0, t0, t1, t2, section1, t3, t4, t5, section2, t6, t7, t8, section3, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, section4, t21, t22, t23, t24, t25, t26, t27, section5, t28, t29, t30, t31, t32, t33, section6, t34, t35, t36, t37, t38, t39, t40, t41, t42, div_class_value, current;
+    	var div, section0, t0, t1, t2, section1, t3, t4, t5, section2, t6, t7, t8, section3, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, section4, t21, t22, t23, t24, t25, t26, t27, section5, t28, t29, t30, t31, t32, t33, section6, t34, t35, t36, t37, t38, t39, t40, t41, div_class_value, current;
 
     	var mathbutton0 = new MathButton({
     		props: { tex: '(' },
@@ -79426,10 +79424,10 @@ var app = (function () {
     	mathbutton21.$on("click", handleClearClick);
 
     	var mathbutton22 = new MathButton({
-    		props: { tex: 'mod' },
+    		props: { tex: 'mod_a' },
     		$$inline: true
     	});
-    	mathbutton22.$on("click", applyTransform(CALC_OPERATION.MOD));
+    	mathbutton22.$on("click", ctx.click_handler_3);
 
     	var mathbutton23 = new MathButton({
     		props: { tex: '*10^y' },
@@ -79552,22 +79550,16 @@ var app = (function () {
     	mathbutton40.$on("click", applyTransform(CALC_OPERATION.LOG));
 
     	var mathbutton41 = new MathButton({
-    		props: { tex: 'ln(x)' },
-    		$$inline: true
-    	});
-    	mathbutton41.$on("click", applyTransform(CALC_OPERATION.LN));
-
-    	var mathbutton42 = new MathButton({
     		props: { tex: 'lg(x)' },
     		$$inline: true
     	});
-    	mathbutton42.$on("click", applyTransform(CALC_OPERATION.LG));
+    	mathbutton41.$on("click", applyTransform(CALC_OPERATION.LG));
 
-    	var mathbutton43 = new MathButton({
-    		props: { tex: 'log_a(x)' },
+    	var mathbutton42 = new MathButton({
+    		props: { tex: 'log_b(x)' },
     		$$inline: true
     	});
-    	mathbutton43.$on("click", applyTransform(CALC_OPERATION.LOG_BASE_A));
+    	mathbutton42.$on("click", ctx.click_handler_4);
 
     	return {
     		c: function create() {
@@ -79664,8 +79656,6 @@ var app = (function () {
     			mathbutton41.$$.fragment.c();
     			t41 = space();
     			mathbutton42.$$.fragment.c();
-    			t42 = space();
-    			mathbutton43.$$.fragment.c();
     			attr(section0, "class", "grouper-panel");
     			add_location(section0, file$3, 45, 4, 1451);
     			attr(section1, "class", "variable-panel");
@@ -79677,9 +79667,9 @@ var app = (function () {
     			attr(section4, "class", "basic-ops-panel");
     			add_location(section4, file$3, 87, 4, 4122);
     			attr(section5, "class", "trig-panel");
-    			add_location(section5, file$3, 97, 4, 4934);
+    			add_location(section5, file$3, 100, 4, 5039);
     			attr(section6, "class", "advanced-ops-panel");
-    			add_location(section6, file$3, 106, 4, 5499);
+    			add_location(section6, file$3, 109, 4, 5604);
     			attr(div, "class", div_class_value = "calculator-panel " + ctx.className);
     			add_location(div, file$3, 43, 0, 1403);
     		},
@@ -79782,8 +79772,6 @@ var app = (function () {
     			mount_component(mathbutton41, section6, null);
     			append(section6, t41);
     			mount_component(mathbutton42, section6, null);
-    			append(section6, t42);
-    			mount_component(mathbutton43, section6, null);
     			current = true;
     		},
 
@@ -79881,8 +79869,6 @@ var app = (function () {
 
     			transition_in(mathbutton42.$$.fragment, local);
 
-    			transition_in(mathbutton43.$$.fragment, local);
-
     			current = true;
     		},
 
@@ -79930,7 +79916,6 @@ var app = (function () {
     			transition_out(mathbutton40.$$.fragment, local);
     			transition_out(mathbutton41.$$.fragment, local);
     			transition_out(mathbutton42.$$.fragment, local);
-    			transition_out(mathbutton43.$$.fragment, local);
     			current = false;
     		},
 
@@ -80024,8 +80009,6 @@ var app = (function () {
     			destroy_component(mathbutton41);
 
     			destroy_component(mathbutton42);
-
-    			destroy_component(mathbutton43);
     		}
     	};
     }
@@ -80089,6 +80072,16 @@ var app = (function () {
     	            mathVariableStore.add('z');
     	        }
 
+    	function click_handler_3() {
+    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.MOD]);
+    	            mathVariableStore.add('a');
+    	        }
+
+    	function click_handler_4() {
+    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.LOG_BASE_B]);
+    	            mathVariableStore.add('b');
+    	        }
+
     	$$self.$set = $$props => {
     		if ('className' in $$props) $$invalidate('className', className = $$props.className);
     	};
@@ -80098,7 +80091,9 @@ var app = (function () {
     		handleSolveClick,
     		click_handler,
     		click_handler_1,
-    		click_handler_2
+    		click_handler_2,
+    		click_handler_3,
+    		click_handler_4
     	};
     }
 
@@ -80619,7 +80614,6 @@ var app = (function () {
     }
 
     /* src/components/SolutionDisplay/SolutionDisplay.svelte generated by Svelte v3.7.1 */
-    const { console: console_1$1 } = globals;
 
     const file$8 = "src/components/SolutionDisplay/SolutionDisplay.svelte";
 
@@ -80635,7 +80629,7 @@ var app = (function () {
     const get_pre_slot_changes = () => ({});
     const get_pre_slot_context = () => ({});
 
-    // (27:0) {:else}
+    // (32:0) {:else}
     function create_else_block$1(ctx) {
     	var current;
 
@@ -80685,7 +80679,7 @@ var app = (function () {
     	};
     }
 
-    // (25:54) 
+    // (30:54) 
     function create_if_block_1$1(ctx) {
     	var current;
 
@@ -80735,7 +80729,7 @@ var app = (function () {
     	};
     }
 
-    // (21:0) {#if typeof $mathSolutionStore.solution === 'number'}
+    // (26:0) {#if typeof $mathSolutionStore.solution === 'number' || typeof $mathSolutionStore.solution === 'object'}
     function create_if_block$2(ctx) {
     	var t0, span, t1_value = ctx.formatter(ctx.$mathSolutionStore.solution), t1, t2, current;
 
@@ -80756,7 +80750,7 @@ var app = (function () {
     			if (post_slot) post_slot.c();
 
     			attr(span, "class", ctx.classList);
-    			add_location(span, file$8, 22, 4, 455);
+    			add_location(span, file$8, 27, 4, 675);
     		},
 
     		l: function claim(nodes) {
@@ -80845,7 +80839,7 @@ var app = (function () {
     	var if_blocks = [];
 
     	function select_block_type(ctx) {
-    		if (typeof ctx.$mathSolutionStore.solution === 'number') return 0;
+    		if (typeof ctx.$mathSolutionStore.solution === 'number' || typeof ctx.$mathSolutionStore.solution === 'object') return 0;
     		if (typeof mathSolutionStore.error === 'string') return 1;
     		return 2;
     	}
@@ -80920,10 +80914,15 @@ var app = (function () {
 
     	let { classList = '' } = $$props;
 
-        const formatter = solution => {
-            console.log('formatting', solution, typeof solution);
+           const formatter = solution => {
             if (typeof solution === 'object') {
-                return `${solution.re} + ${solution.im}i`;
+
+                const {re, im} = solution;
+                // Formats      {re: 0, im: x} to 'xi',
+                //              {re: x, im: 0} to 'x',
+                //              {re: x, im: y} to 'x + yi'
+                return `${re ? re : ''}${re && im ? ' + ' : ''}${im ? `${im}i` : ''}`;
+
             } else {
                 return solution;
             }
@@ -80931,7 +80930,7 @@ var app = (function () {
 
     	const writable_props = ['classList'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console_1$1.warn(`<SolutionDisplay> was created with unknown prop '${key}'`);
+    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<SolutionDisplay> was created with unknown prop '${key}'`);
     	});
 
     	let { $$slots = {}, $$scope } = $$props;

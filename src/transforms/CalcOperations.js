@@ -41,9 +41,8 @@ const CALC_TRANSFORM = {
     [CALC_OPERATIONS.TANH]: ({ selection }) => `tanh(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.ABS]: ({ selection }) => `abs(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.LOG]: ({ selection }) => `log(${wrapSelection(selection, '', ')')}`,
-    [CALC_OPERATIONS.LN]: ({ selection }) => `ln(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.LG]: ({ selection }) => `log_2(${wrapSelection(selection, '', ')')}`,
-    [CALC_OPERATIONS.LOG_BASE_A]: ({ selection }) => `log_a(${wrapSelection(selection, '', ')')}`,
+    [CALC_OPERATIONS.LOG_BASE_B]: ({ selection }) => `log_b(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.I]: () => ' i ',
 }
 

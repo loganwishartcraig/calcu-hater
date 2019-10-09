@@ -87,7 +87,10 @@
 
     <section class="basic-ops-panel">
         <MathButton tex={'clear'} color="bg-red-200 hover:bg-red-300" on:click={handleClearClick} />
-        <MathButton tex={'mod'}   on:click={applyTransform(CALC_OPERATION.MOD)}/>
+        <MathButton tex={'mod_a'}   on:click={() => {
+            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.MOD]);
+            mathVariableStore.add('a');
+        }}/>
         <MathButton tex={'*10^y'}   on:click={applyTransform(CALC_OPERATION.RAISE_TEN)}/>
         <MathButton tex={ '/'} color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.DIVIDE)}/>
         <MathButton tex={'*'}  color="bg-blue-200 hover:bg-blue-300"  on:click={applyTransform(CALC_OPERATION.MULTIPLY)}/>
@@ -112,9 +115,11 @@
         <MathButton tex={'x!'}   on:click={applyTransform(CALC_OPERATION.FACTORIAL)}/>
         <MathButton tex={'|x|'}   on:click={applyTransform(CALC_OPERATION.ABS)}/>
         <MathButton tex={'log(x)'}   on:click={applyTransform(CALC_OPERATION.LOG)}/>
-        <MathButton tex={'ln(x)'}   on:click={applyTransform(CALC_OPERATION.LN)}/>
         <MathButton tex={'lg(x)'}   on:click={applyTransform(CALC_OPERATION.LG)}/>
-        <MathButton tex={'log_a(x)'}   on:click={applyTransform(CALC_OPERATION.LOG_BASE_A)}/>
+        <MathButton tex={'log_b(x)'}   on:click={() => {
+            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.LOG_BASE_B]);
+            mathVariableStore.add('b');
+        }}/>
     </section>
 
 
