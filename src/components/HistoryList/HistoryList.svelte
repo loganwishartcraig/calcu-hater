@@ -9,11 +9,19 @@
         mathInputStore.setValue(item.solution.toString());
     }
 
+    let visibleHistory = [];
+
+    mathSolutionStore.subscribe(({history}) => {
+        const start = Math.max(history.length - showCount, 0);
+        const end = start + showCount;
+        visibleHistory = history.slice(start, end);
+    });
+
 </script>
 
 
 <ul class="history-list">
-    {#each $mathSolutionStore.history as item (item.id)}
+    {#each visibleHistory as item}
         <HistoryListItem value={item.solution} on:click={() => handleItemClick(item)}/>
     {/each}
 </ul>

@@ -8346,8 +8346,10 @@ video {
   grid-template-columns: 1fr 1fr;
   grid-template-rows: auto;
   grid-template:
-        "output history"
-        "input variable";
+        "output output history"
+        "output output history"
+        "input input variable"
+        "input input variable";
 }
 
 .history-container {
