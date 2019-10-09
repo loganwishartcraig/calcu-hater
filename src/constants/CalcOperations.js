@@ -38,6 +38,7 @@ const CALC_OPERATION = {
     ABS: 'ABS',
     LOG: 'LOG',
     LG: 'LG',
+    LOG_B_10: 'LOG_B_10',
     LOG_BASE_B: 'LOG_BASE_B',
     I: 'I',
     CLEAR: 'CLEAR',

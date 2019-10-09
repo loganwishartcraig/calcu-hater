@@ -42,6 +42,7 @@ const CALC_TRANSFORM = {
     [CALC_OPERATIONS.ABS]: ({ selection }) => `abs(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.LOG]: ({ selection }) => `log(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.LG]: ({ selection }) => `log_2(${wrapSelection(selection, '', ')')}`,
+    [CALC_OPERATIONS.LOG_B_10]: ({ selection }) => `log_10(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.LOG_BASE_B]: ({ selection }) => `log_b(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.I]: () => ' i ',
 }

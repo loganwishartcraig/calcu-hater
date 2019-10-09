@@ -79193,6 +79193,7 @@ var app = (function () {
         ABS: 'ABS',
         LOG: 'LOG',
         LG: 'LG',
+        LOG_B_10: 'LOG_B_10',
         LOG_BASE_B: 'LOG_BASE_B',
         I: 'I',
         CLEAR: 'CLEAR',
@@ -79240,6 +79241,7 @@ var app = (function () {
         [CALC_OPERATION.ABS]: ({ selection }) => `abs(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.LOG]: ({ selection }) => `log(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.LG]: ({ selection }) => `log_2(${wrapSelection(selection, '', ')')}`,
+        [CALC_OPERATION.LOG_B_10]: ({ selection }) => `log_10(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.LOG_BASE_B]: ({ selection }) => `log_b(${wrapSelection(selection, '', ')')}`,
         [CALC_OPERATION.I]: () => ' i ',
     };
@@ -79250,7 +79252,7 @@ var app = (function () {
     const file$3 = "src/components/MathButtonPanel/MathButtonPanel.svelte";
 
     function create_fragment$5(ctx) {
-    	var div, section0, t0, t1, t2, section1, t3, t4, t5, section2, t6, t7, t8, section3, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, section4, t21, t22, t23, t24, t25, t26, t27, section5, t28, t29, t30, t31, t32, t33, section6, t34, t35, t36, t37, t38, t39, t40, t41, div_class_value, current;
+    	var div, section0, t0, t1, t2, section1, t3, t4, t5, section2, t6, t7, t8, section3, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, section4, t21, t22, t23, t24, t25, t26, t27, section5, t28, t29, t30, t31, t32, t33, section6, t34, t35, t36, t37, t38, t39, t40, t41, t42, div_class_value, current;
 
     	var mathbutton0 = new MathButton({
     		props: { tex: '(' },
@@ -79544,22 +79546,28 @@ var app = (function () {
     	mathbutton39.$on("click", applyTransform(CALC_OPERATION.ABS));
 
     	var mathbutton40 = new MathButton({
-    		props: { tex: 'log(x)' },
+    		props: { tex: 'log_e(x)' },
     		$$inline: true
     	});
     	mathbutton40.$on("click", applyTransform(CALC_OPERATION.LOG));
 
     	var mathbutton41 = new MathButton({
-    		props: { tex: 'lg(x)' },
+    		props: { tex: 'log_{10}(x)' },
     		$$inline: true
     	});
-    	mathbutton41.$on("click", applyTransform(CALC_OPERATION.LG));
+    	mathbutton41.$on("click", applyTransform(CALC_OPERATION.LOG_B_10));
 
     	var mathbutton42 = new MathButton({
+    		props: { tex: 'log_2(x)' },
+    		$$inline: true
+    	});
+    	mathbutton42.$on("click", applyTransform(CALC_OPERATION.LG));
+
+    	var mathbutton43 = new MathButton({
     		props: { tex: 'log_b(x)' },
     		$$inline: true
     	});
-    	mathbutton42.$on("click", ctx.click_handler_4);
+    	mathbutton43.$on("click", ctx.click_handler_4);
 
     	return {
     		c: function create() {
@@ -79656,6 +79664,8 @@ var app = (function () {
     			mathbutton41.$$.fragment.c();
     			t41 = space();
     			mathbutton42.$$.fragment.c();
+    			t42 = space();
+    			mathbutton43.$$.fragment.c();
     			attr(section0, "class", "grouper-panel");
     			add_location(section0, file$3, 45, 4, 1451);
     			attr(section1, "class", "variable-panel");
@@ -79772,6 +79782,8 @@ var app = (function () {
     			mount_component(mathbutton41, section6, null);
     			append(section6, t41);
     			mount_component(mathbutton42, section6, null);
+    			append(section6, t42);
+    			mount_component(mathbutton43, section6, null);
     			current = true;
     		},
 
@@ -79869,6 +79881,8 @@ var app = (function () {
 
     			transition_in(mathbutton42.$$.fragment, local);
 
+    			transition_in(mathbutton43.$$.fragment, local);
+
     			current = true;
     		},
 
@@ -79916,6 +79930,7 @@ var app = (function () {
     			transition_out(mathbutton40.$$.fragment, local);
     			transition_out(mathbutton41.$$.fragment, local);
     			transition_out(mathbutton42.$$.fragment, local);
+    			transition_out(mathbutton43.$$.fragment, local);
     			current = false;
     		},
 
@@ -80009,6 +80024,8 @@ var app = (function () {
     			destroy_component(mathbutton41);
 
     			destroy_component(mathbutton42);
+
+    			destroy_component(mathbutton43);
     		}
     	};
     }

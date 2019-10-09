@@ -114,8 +114,9 @@
         <MathButton tex={'\\sqrt{x}'}   on:click={applyTransform(CALC_OPERATION.SQUARE_ROOT)}/>
         <MathButton tex={'x!'}   on:click={applyTransform(CALC_OPERATION.FACTORIAL)}/>
         <MathButton tex={'|x|'}   on:click={applyTransform(CALC_OPERATION.ABS)}/>
-        <MathButton tex={'log(x)'}   on:click={applyTransform(CALC_OPERATION.LOG)}/>
-        <MathButton tex={'lg(x)'}   on:click={applyTransform(CALC_OPERATION.LG)}/>
+        <MathButton tex={'log_e(x)'}   on:click={applyTransform(CALC_OPERATION.LOG)}/>
+        <MathButton tex={'log_{10}(x)'}   on:click={applyTransform(CALC_OPERATION.LOG_B_10)}/>
+        <MathButton tex={'log_2(x)'}   on:click={applyTransform(CALC_OPERATION.LG)}/>
         <MathButton tex={'log_b(x)'}   on:click={() => {
             mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.LOG_BASE_B]);
             mathVariableStore.add('b');
