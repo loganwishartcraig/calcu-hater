@@ -78760,11 +78760,11 @@ var app = (function () {
 
     const INSULTS = [
         'Are you... are you joking? Too easy.',
-        'Haha, unbelievable. You need help with that?',
+        'Haha, unbelievable. You need help with <i>that</i>?',
         '-.- get it together, that\'s child\'s play.',
-        'I GUESS I can tell you the answer...',
-        'You woke me up for this? Really?',
-        'Somebody could use a math lesson...',
+        'I <i>GUESS</i> I can tell you the answer...',
+        'You woke me up for <i>this</i>? Really?',
+        '<i>Somebody</i> could use a math lesson...',
         'Brb, laughing at you.',
         '*rolling eyes emoji*'
     ];
@@ -80568,15 +80568,15 @@ var app = (function () {
     			button1.textContent = "clr";
     			attr(input, "type", "text");
     			attr(input, "maxlength", "1");
-    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1");
+    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-gray-400 focus:border-blue-400");
     			add_location(input, file$6, 21, 4, 443);
     			attr(button0, "type", "submit");
     			button0.disabled = button0_disabled_value = !ctx.value;
-    			attr(button0, "class", "px-2 mr-1");
-    			add_location(button0, file$6, 22, 4, 534);
+    			attr(button0, "class", "px-2 mr-1 bg-gray-100 hover:bg-gray-300");
+    			add_location(button0, file$6, 22, 4, 572);
     			attr(button1, "type", "button");
-    			attr(button1, "class", "px-2");
-    			add_location(button1, file$6, 23, 4, 607);
+    			attr(button1, "class", "px-2 bg-red-200 hover:bg-red-300");
+    			add_location(button1, file$6, 23, 4, 675);
     			attr(form, "class", "flex max-w-full py-2 border-b border-gray-400");
     			add_location(form, file$6, 20, 0, 338);
 
@@ -80678,12 +80678,11 @@ var app = (function () {
     const file$7 = "src/components/InsultDisplay/InsultDisplay.svelte";
 
     function create_fragment$9(ctx) {
-    	var span, t;
+    	var span;
 
     	return {
     		c: function create() {
     			span = element("span");
-    			t = text(ctx.$insultStore);
     			add_location(span, file$7, 7, 0, 68);
     		},
 
@@ -80693,12 +80692,12 @@ var app = (function () {
 
     		m: function mount(target, anchor) {
     			insert(target, span, anchor);
-    			append(span, t);
+    			span.innerHTML = ctx.$insultStore;
     		},
 
     		p: function update(changed, ctx) {
     			if (changed.$insultStore) {
-    				set_data(t, ctx.$insultStore);
+    				span.innerHTML = ctx.$insultStore;
     			}
     		},
 
@@ -81363,7 +81362,7 @@ var app = (function () {
 
     const file$b = "src/App.svelte";
 
-    // (27:4) <span slot="pre">
+    // (23:5) <span slot="pre">
     function create_pre_slot(ctx) {
     	var span;
 
@@ -81372,7 +81371,7 @@ var app = (function () {
     			span = element("span");
     			span.textContent = "Ans:";
     			attr(span, "slot", "pre");
-    			add_location(span, file$b, 26, 4, 1004);
+    			add_location(span, file$b, 22, 5, 907);
     		},
 
     		m: function mount(target, anchor) {
@@ -81387,7 +81386,7 @@ var app = (function () {
     	};
     }
 
-    // (26:3) <SolutionDisplay classList="text-blue-500">
+    // (22:4) <SolutionDisplay classList="text-blue-500">
     function create_default_slot_1(ctx) {
     	return {
     		c: noop,
@@ -81397,7 +81396,7 @@ var app = (function () {
     	};
     }
 
-    // (43:5) <div slot="error">
+    // (32:6) <div slot="error">
     function create_error_slot(ctx) {
     	var div, span, t0, t1_value = ctx.error, t1;
 
@@ -81408,9 +81407,9 @@ var app = (function () {
     			t0 = text("Whoa bud. ");
     			t1 = text(t1_value);
     			attr(span, "class", "text-red-500");
-    			add_location(span, file$b, 42, 23, 1429);
+    			add_location(span, file$b, 31, 24, 1157);
     			attr(div, "slot", "error");
-    			add_location(div, file$b, 42, 5, 1411);
+    			add_location(div, file$b, 31, 6, 1139);
     		},
 
     		m: function mount(target, anchor) {
@@ -81434,7 +81433,7 @@ var app = (function () {
     	};
     }
 
-    // (44:5) <div slot="waiting" class="text-3xl">
+    // (33:6) <div slot="waiting" class="text-3xl">
     function create_waiting_slot(ctx) {
     	var div, i;
 
@@ -81443,10 +81442,10 @@ var app = (function () {
     			div = element("div");
     			i = element("i");
     			i.textContent = "Well...?";
-    			add_location(i, file$b, 43, 42, 1529);
+    			add_location(i, file$b, 32, 43, 1258);
     			attr(div, "slot", "waiting");
     			attr(div, "class", "text-3xl");
-    			add_location(div, file$b, 43, 5, 1492);
+    			add_location(div, file$b, 32, 6, 1221);
     		},
 
     		m: function mount(target, anchor) {
@@ -81462,7 +81461,7 @@ var app = (function () {
     	};
     }
 
-    // (42:4) <MathInputTexRender className="text-3xl" let:error>
+    // (31:5) <MathInputTexRender className="text-3xl" let:error>
     function create_default_slot$1(ctx) {
     	var t;
 
@@ -81486,9 +81485,7 @@ var app = (function () {
     }
 
     function create_fragment$d(ctx) {
-    	var main, div0, h30, t1, t2, div3, div2, t3, div1, t4, div4, h31, t6, t7, t8, div8, div7, div5, t9, div6, t10, current;
-
-    	var historylist = new HistoryList({ $$inline: true });
+    	var main, div6, div1, t0, div0, t1, div5, div4, div2, t2, div3, t3, t4, div9, div7, h30, t6, t7, div8, h31, t9, t10, current;
 
     	var insultdisplay = new InsultDisplay({ $$inline: true });
 
@@ -81503,10 +81500,6 @@ var app = (function () {
     	},
     		$$inline: true
     	});
-
-    	var variableaddform = new VariableAddForm({ $$inline: true });
-
-    	var variablelist = new VariableList({ $$inline: true });
 
     	var mathinputtexrender = new MathInputTexRender({
     		props: {
@@ -81528,60 +81521,70 @@ var app = (function () {
     		$$inline: true
     	});
 
+    	var historylist = new HistoryList({ $$inline: true });
+
+    	var variableaddform = new VariableAddForm({ $$inline: true });
+
+    	var variablelist = new VariableList({ $$inline: true });
+
     	return {
     		c: function create() {
     			main = element("main");
+    			div6 = element("div");
+    			div1 = element("div");
+    			insultdisplay.$$.fragment.c();
+    			t0 = space();
     			div0 = element("div");
-    			h30 = element("h3");
-    			h30.textContent = "History";
+    			solutiondisplay.$$.fragment.c();
     			t1 = space();
-    			historylist.$$.fragment.c();
+    			div5 = element("div");
+    			div4 = element("div");
+    			div2 = element("div");
+    			mathinputtexrender.$$.fragment.c();
     			t2 = space();
     			div3 = element("div");
-    			div2 = element("div");
-    			insultdisplay.$$.fragment.c();
+    			mathinput.$$.fragment.c();
     			t3 = space();
-    			div1 = element("div");
-    			solutiondisplay.$$.fragment.c();
+    			mathbuttonpanel.$$.fragment.c();
     			t4 = space();
-    			div4 = element("div");
+    			div9 = element("div");
+    			div7 = element("div");
+    			h30 = element("h3");
+    			h30.textContent = "History";
+    			t6 = space();
+    			historylist.$$.fragment.c();
+    			t7 = space();
+    			div8 = element("div");
     			h31 = element("h3");
     			h31.textContent = "Variables";
-    			t6 = space();
-    			variableaddform.$$.fragment.c();
-    			t7 = space();
-    			variablelist.$$.fragment.c();
-    			t8 = space();
-    			div8 = element("div");
-    			div7 = element("div");
-    			div5 = element("div");
-    			mathinputtexrender.$$.fragment.c();
     			t9 = space();
-    			div6 = element("div");
-    			mathinput.$$.fragment.c();
+    			variableaddform.$$.fragment.c();
     			t10 = space();
-    			mathbuttonpanel.$$.fragment.c();
+    			variablelist.$$.fragment.c();
+    			add_location(div0, file$b, 20, 3, 848);
+    			attr(div1, "class", "flex flex-col items-center justify-center text-5xl text-center h-64");
+    			add_location(div1, file$b, 18, 2, 742);
+    			attr(div2, "class", "mb-2 text-center");
+    			add_location(div2, file$b, 29, 4, 1045);
+    			attr(div3, "class", "mb-2");
+    			add_location(div3, file$b, 35, 4, 1322);
+    			attr(div4, "class", "flex flex-col h-full");
+    			add_location(div4, file$b, 28, 3, 1006);
+    			attr(div5, "class", "flex-1");
+    			add_location(div5, file$b, 27, 2, 982);
+    			attr(div6, "class", "flex flex-col justify-center w-2/3");
+    			add_location(div6, file$b, 16, 1, 690);
     			attr(h30, "class", "font-bold text-center p-1 border-b border-gray-400");
-    			add_location(h30, file$b, 17, 2, 724);
-    			attr(div0, "class", "history-container");
-    			add_location(div0, file$b, 16, 1, 690);
-    			add_location(div1, file$b, 24, 3, 947);
-    			add_location(div2, file$b, 22, 2, 917);
-    			attr(div3, "class", "solution-container flex items-center justify-center text-5xl text-center");
-    			add_location(div3, file$b, 21, 1, 828);
+    			add_location(h30, file$b, 47, 3, 1526);
+    			attr(div7, "class", "h-64");
+    			add_location(div7, file$b, 46, 2, 1504);
     			attr(h31, "class", "font-bold text-center p-1 border-b border-gray-400");
-    			add_location(h31, file$b, 33, 2, 1120);
-    			attr(div4, "class", "variable-container");
-    			add_location(div4, file$b, 32, 1, 1085);
-    			attr(div5, "class", "mb-2 text-center");
-    			add_location(div5, file$b, 40, 3, 1319);
-    			attr(div6, "class", "mb-2");
-    			add_location(div6, file$b, 46, 3, 1590);
-    			attr(div7, "class", "flex flex-col h-full");
-    			add_location(div7, file$b, 39, 2, 1281);
-    			attr(div8, "class", "input-container");
-    			add_location(div8, file$b, 38, 1, 1249);
-    			attr(main, "class", "app-container");
+    			add_location(h31, file$b, 52, 3, 1657);
+    			attr(div8, "class", "flex-1");
+    			add_location(div8, file$b, 51, 2, 1633);
+    			attr(div9, "class", "flex flex-col justify-center w-1/3 px-2");
+    			add_location(div9, file$b, 44, 1, 1447);
+    			attr(main, "class", "h-screen flex");
     			add_location(main, file$b, 14, 0, 659);
     		},
 
@@ -81591,34 +81594,35 @@ var app = (function () {
 
     		m: function mount(target, anchor) {
     			insert(target, main, anchor);
-    			append(main, div0);
-    			append(div0, h30);
-    			append(div0, t1);
-    			mount_component(historylist, div0, null);
-    			append(main, t2);
-    			append(main, div3);
-    			append(div3, div2);
-    			mount_component(insultdisplay, div2, null);
-    			append(div2, t3);
-    			append(div2, div1);
-    			mount_component(solutiondisplay, div1, null);
+    			append(main, div6);
+    			append(div6, div1);
+    			mount_component(insultdisplay, div1, null);
+    			append(div1, t0);
+    			append(div1, div0);
+    			mount_component(solutiondisplay, div0, null);
+    			append(div6, t1);
+    			append(div6, div5);
+    			append(div5, div4);
+    			append(div4, div2);
+    			mount_component(mathinputtexrender, div2, null);
+    			append(div4, t2);
+    			append(div4, div3);
+    			mount_component(mathinput, div3, null);
+    			append(div4, t3);
+    			mount_component(mathbuttonpanel, div4, null);
     			append(main, t4);
-    			append(main, div4);
-    			append(div4, h31);
-    			append(div4, t6);
-    			mount_component(variableaddform, div4, null);
-    			append(div4, t7);
-    			mount_component(variablelist, div4, null);
-    			append(main, t8);
-    			append(main, div8);
-    			append(div8, div7);
-    			append(div7, div5);
-    			mount_component(mathinputtexrender, div5, null);
-    			append(div7, t9);
-    			append(div7, div6);
-    			mount_component(mathinput, div6, null);
-    			append(div7, t10);
-    			mount_component(mathbuttonpanel, div7, null);
+    			append(main, div9);
+    			append(div9, div7);
+    			append(div7, h30);
+    			append(div7, t6);
+    			mount_component(historylist, div7, null);
+    			append(div9, t7);
+    			append(div9, div8);
+    			append(div8, h31);
+    			append(div8, t9);
+    			mount_component(variableaddform, div8, null);
+    			append(div8, t10);
+    			mount_component(variablelist, div8, null);
     			current = true;
     		},
 
@@ -81634,15 +81638,9 @@ var app = (function () {
 
     		i: function intro(local) {
     			if (current) return;
-    			transition_in(historylist.$$.fragment, local);
-
     			transition_in(insultdisplay.$$.fragment, local);
 
     			transition_in(solutiondisplay.$$.fragment, local);
-
-    			transition_in(variableaddform.$$.fragment, local);
-
-    			transition_in(variablelist.$$.fragment, local);
 
     			transition_in(mathinputtexrender.$$.fragment, local);
 
@@ -81650,18 +81648,24 @@ var app = (function () {
 
     			transition_in(mathbuttonpanel.$$.fragment, local);
 
+    			transition_in(historylist.$$.fragment, local);
+
+    			transition_in(variableaddform.$$.fragment, local);
+
+    			transition_in(variablelist.$$.fragment, local);
+
     			current = true;
     		},
 
     		o: function outro(local) {
-    			transition_out(historylist.$$.fragment, local);
     			transition_out(insultdisplay.$$.fragment, local);
     			transition_out(solutiondisplay.$$.fragment, local);
-    			transition_out(variableaddform.$$.fragment, local);
-    			transition_out(variablelist.$$.fragment, local);
     			transition_out(mathinputtexrender.$$.fragment, local);
     			transition_out(mathinput.$$.fragment, local);
     			transition_out(mathbuttonpanel.$$.fragment, local);
+    			transition_out(historylist.$$.fragment, local);
+    			transition_out(variableaddform.$$.fragment, local);
+    			transition_out(variablelist.$$.fragment, local);
     			current = false;
     		},
 
@@ -81670,21 +81674,21 @@ var app = (function () {
     				detach(main);
     			}
 
-    			destroy_component(historylist);
-
     			destroy_component(insultdisplay);
 
     			destroy_component(solutiondisplay);
-
-    			destroy_component(variableaddform);
-
-    			destroy_component(variablelist);
 
     			destroy_component(mathinputtexrender);
 
     			destroy_component(mathinput);
 
     			destroy_component(mathbuttonpanel);
+
+    			destroy_component(historylist);
+
+    			destroy_component(variableaddform);
+
+    			destroy_component(variablelist);
     		}
     	};
     }

@@ -1,11 +1,11 @@
 
 const INSULTS = [
     'Are you... are you joking? Too easy.',
-    'Haha, unbelievable. You need help with that?',
+    'Haha, unbelievable. You need help with <i>that</i>?',
     '-.- get it together, that\'s child\'s play.',
-    'I GUESS I can tell you the answer...',
-    'You woke me up for this? Really?',
-    'Somebody could use a math lesson...',
+    'I <i>GUESS</i> I can tell you the answer...',
+    'You woke me up for <i>this</i>? Really?',
+    '<i>Somebody</i> could use a math lesson...',
     'Brb, laughing at you.',
     '*rolling eyes emoji*'
 ];

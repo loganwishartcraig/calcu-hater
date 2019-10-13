@@ -5,4 +5,4 @@
 </script>
 
 
-<span>{$insultStore}</span>
+<span>{@html $insultStore}</span>
