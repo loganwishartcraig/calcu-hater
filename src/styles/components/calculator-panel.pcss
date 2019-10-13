@@ -1,18 +1,213 @@
 
 .calculator-panel {
     display: grid;
-    grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr;
+    /* grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr; */
     grid-template-rows: auto;
     grid-template-areas:
-        "trig trig grouper grouper grouper basic"
-        "trig trig variable variable variable basic"
-        "advanced advanced constant constant constant basic"
-        "advanced advanced numeric numeric numeric basic"
-        "advanced advanced numeric numeric numeric basic"
-        "advanced advanced numeric numeric numeric basic"
-        "advanced advanced numeric numeric numeric basic";
+        "sin    cos     tan     open-paren  close-paren wrap-paren  ."
+        "sinh   cosh    tanh    x           y           z           ."
+        "pow-1  powy    ex      i           e           pi          clr"
+        "pow2   sqrt    moda    seven       eight       nine        mul"
+        "fact   abs     raise10 four        five        six         div"
+        "loge   log10   .       one         two         three       add"
+        "log2   logb    .       zero        dec         eq          sub"
+
+        /* "trig trig grouper grouper grouper basic" */
+        /* "trig trig variable variable variable basic" */
+        /* "advanced advanced constant constant constant basic" */
+        /* "advanced advanced numeric numeric numeric basic" */
+        /* "advanced advanced numeric numeric numeric basic" */
+        /* "advanced advanced numeric numeric numeric basic" */
+        /* "advanced advanced numeric numeric numeric basic"; */
 }
 
+.calc-btn__open-paren {
+    grid-area: open-paren;
+}
+
+.calc-btn__close-paren {
+    grid-area: close-paren;
+}
+
+.calc-btn__wrap-paren {
+    grid-area: wrap-paren;
+}
+
+.calc-btn__x {
+    grid-area: x;
+}
+
+.calc-btn__y {
+    grid-area: y;
+}
+
+.calc-btn__z {
+    grid-area: z;
+}
+
+
+.calc-btn__pi{
+    grid-area: pi;
+}
+
+.calc-btn__e{
+    grid-area: e;
+}
+
+.calc-btn__i{
+    grid-area: i;
+}
+
+.calc-btn__1{
+    grid-area: one;
+}
+
+.calc-btn__2{
+    grid-area: two;
+}
+
+.calc-btn__3{
+    grid-area: three;
+}
+
+.calc-btn__4{
+    grid-area: four;
+}
+
+.calc-btn__5{
+    grid-area: five;
+}
+
+.calc-btn__6{
+    grid-area: six;
+}
+
+.calc-btn__7{
+    grid-area: seven;
+}
+
+.calc-btn__8{
+    grid-area: eight;
+}
+
+.calc-btn__9{
+    grid-area: nine;
+}
+
+.calc-btn__0{
+    grid-area: zero;
+}
+
+.calc-btn__dec{
+    grid-area: dec;
+}
+
+.calc-btn__eq{
+    grid-area: eq;
+}
+
+.calc-btn__clr{
+    grid-area: clr;
+}
+
+.calc-btn__moda{
+    grid-area: moda;
+}
+
+.calc-btn__raise10{
+    grid-area: raise10;
+}
+
+.calc-btn__div{
+    grid-area: div;
+}
+
+.calc-btn__mul{
+    grid-area: mul;
+}
+
+.calc-btn__sub{
+    grid-area: sub;
+}
+
+.calc-btn__add{
+    grid-area: add;
+}
+
+.calc-btn__cos{
+    grid-area: cos;
+}
+
+.calc-btn__sin{
+    grid-area: sin;
+}
+
+.calc-btn__tan{
+    grid-area: tan;
+}
+
+.calc-btn__sinh{
+    grid-area: sinh;
+}
+
+.calc-btn__cosh{
+    grid-area: cosh;
+}
+
+.calc-btn__tanh{
+    grid-area: tanh;
+}
+
+.calc-btn__pow-1 {
+    grid-area: pow-1;
+}
+
+.calc-btn__pow{
+    grid-area: pow;
+}
+
+.calc-btn__ex {
+    grid-area: ex;
+}
+
+.calc-btn__powy{
+    grid-area: powy;
+}
+
+.calc-btn__pow2{
+    grid-area: pow2;
+}
+
+.calc-btn__sqrt{
+    grid-area: sqrt;
+}
+
+.calc-btn__fact{
+    grid-area: fact;
+}
+
+.calc-btn__abs{
+    grid-area: abs;
+}
+
+.calc-btn__loge{
+    grid-area: loge;
+}
+
+.calc-btn__log10{
+    grid-area: log10;
+}
+
+.calc-btn__log2{
+    grid-area: log2;
+}
+
+.calc-btn__logb{
+    grid-area: logb;
+}
+
+
+/*
 .variable-panel {
     display: grid;
     grid-area: variable;
@@ -52,4 +247,4 @@
     display: grid;
     grid-area: advanced;
     grid-template-columns: repeat(2, 1fr);
-}
+} */

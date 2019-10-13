@@ -30,6 +30,7 @@ const CALC_TRANSFORM = {
     [CALC_OPERATIONS.POWER_NEGATIVE_ONE]: ({ selection }) => `${wrapSelection(selection)}^-1`,
     [CALC_OPERATIONS.POWER_TWO]: ({ selection }) => `${wrapSelection(selection)}^2`,
     [CALC_OPERATIONS.POWER_Y]: ({ selection }) => `${wrapSelection(selection)}^y`,
+    [CALC_OPERATIONS.TO_EXP]: ({ selection }) => `e^(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.SQUARE_ROOT]: ({ selection }) => `sqrt(${wrapSelection(selection, '', ')')}`,
     [CALC_OPERATIONS.FACTORIAL]: ({ selection }) => `${wrapSelection(selection)}!`,
     [CALC_OPERATIONS.WRAP_PAREN]: ({ selection }) => `(${selection})`,
