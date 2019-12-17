@@ -1,5 +1,5 @@
 
-(function(l, i, v, e) { v = l.createElement(i); v.async = 1; v.src = '//' + (location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1'; e = l.getElementsByTagName(i)[0]; e.parentNode.insertBefore(v, e)})(document, 'script');
+(function(l, r) { if (l.getElementById('livereloadscript')) return; r = l.createElement('script'); r.async = 1; r.src = '//' + (window.location.host || 'localhost').split(':')[0] + ':35729/livereload.js?snipver=1'; r.id = 'livereloadscript'; l.head.appendChild(r) })(window.document);
 var app = (function () {
     'use strict';
 
@@ -42,21 +42,31 @@ var app = (function () {
     function component_subscribe(component, store, callback) {
         component.$$.on_destroy.push(subscribe(store, callback));
     }
-    function create_slot(definition, ctx, fn) {
+    function create_slot(definition, ctx, $$scope, fn) {
         if (definition) {
-            const slot_ctx = get_slot_context(definition, ctx, fn);
+            const slot_ctx = get_slot_context(definition, ctx, $$scope, fn);
             return definition[0](slot_ctx);
         }
     }
-    function get_slot_context(definition, ctx, fn) {
-        return definition[1]
-            ? assign({}, assign(ctx.$$scope.ctx, definition[1](fn ? fn(ctx) : {})))
-            : ctx.$$scope.ctx;
+    function get_slot_context(definition, ctx, $$scope, fn) {
+        return definition[1] && fn
+            ? assign($$scope.ctx.slice(), definition[1](fn(ctx)))
+            : $$scope.ctx;
     }
-    function get_slot_changes(definition, ctx, changed, fn) {
-        return definition[1]
-            ? assign({}, assign(ctx.$$scope.changed || {}, definition[1](fn ? fn(changed) : {})))
-            : ctx.$$scope.changed || {};
+    function get_slot_changes(definition, $$scope, dirty, fn) {
+        if (definition[2] && fn) {
+            const lets = definition[2](fn(dirty));
+            if ($$scope.dirty) {
+                const merged = [];
+                const len = Math.max($$scope.dirty.length, lets.length);
+                for (let i = 0; i < len; i += 1) {
+                    merged[i] = $$scope.dirty[i] | lets[i];
+                }
+                return merged;
+            }
+            return lets;
+        }
+        return $$scope.dirty;
     }
 
     function append(target, node) {
@@ -100,16 +110,16 @@ var app = (function () {
     function attr(node, attribute, value) {
         if (value == null)
             node.removeAttribute(attribute);
-        else
+        else if (node.getAttribute(attribute) !== value)
             node.setAttribute(attribute, value);
     }
     function children(element) {
         return Array.from(element.childNodes);
     }
-    function set_data(text, data) {
-        data = '' + data;
-        if (text.data !== data)
-            text.data = data;
+    function set_input_value(input, value) {
+        if (value != null || input.value) {
+            input.value = value;
+        }
     }
     function custom_event(type, detail) {
         const e = document.createEvent('CustomEvent');
@@ -121,8 +131,13 @@ var app = (function () {
     function set_current_component(component) {
         current_component = component;
     }
+    function get_current_component() {
+        if (!current_component)
+            throw new Error(`Function called outside component initialization`);
+        return current_component;
+    }
     function createEventDispatcher() {
-        const component = current_component;
+        const component = get_current_component();
         return (type, detail) => {
             const callbacks = component.$$.callbacks[type];
             if (callbacks) {
@@ -191,11 +206,11 @@ var app = (function () {
         update_scheduled = false;
     }
     function update($$) {
-        if ($$.fragment) {
-            $$.update($$.dirty);
+        if ($$.fragment !== null) {
+            $$.update();
             run_all($$.before_update);
-            $$.fragment.p($$.dirty, $$.ctx);
-            $$.dirty = null;
+            $$.fragment && $$.fragment.p($$.ctx, $$.dirty);
+            $$.dirty = [-1];
             $$.after_update.forEach(add_render_callback);
         }
     }
@@ -243,7 +258,7 @@ var app = (function () {
             lookup.delete(block.key);
         });
     }
-    function update_keyed_each(old_blocks, changed, get_key, dynamic, ctx, list, lookup, node, destroy, create_each_block, next, get_context) {
+    function update_keyed_each(old_blocks, dirty, get_key, dynamic, ctx, list, lookup, node, destroy, create_each_block, next, get_context) {
         let o = old_blocks.length;
         let n = list.length;
         let i = o;
@@ -263,7 +278,7 @@ var app = (function () {
                 block.c();
             }
             else if (dynamic) {
-                block.p(changed, child_ctx);
+                block.p(child_ctx, dirty);
             }
             new_lookup.set(key, new_blocks[i] = block);
             if (key in old_indexes)
@@ -318,9 +333,12 @@ var app = (function () {
             insert(new_blocks[n - 1]);
         return new_blocks;
     }
+    function create_component(block) {
+        block && block.c();
+    }
     function mount_component(component, target, anchor) {
         const { fragment, on_mount, on_destroy, after_update } = component.$$;
-        fragment.m(target, anchor);
+        fragment && fragment.m(target, anchor);
         // onMount happens before the initial afterUpdate
         add_render_callback(() => {
             const new_on_destroy = on_mount.map(run).filter(is_function);
@@ -337,32 +355,33 @@ var app = (function () {
         after_update.forEach(add_render_callback);
     }
     function destroy_component(component, detaching) {
-        if (component.$$.fragment) {
-            run_all(component.$$.on_destroy);
-            component.$$.fragment.d(detaching);
+        const $$ = component.$$;
+        if ($$.fragment !== null) {
+            run_all($$.on_destroy);
+            $$.fragment && $$.fragment.d(detaching);
             // TODO null out other refs, including component.$$ (but need to
             // preserve final state?)
-            component.$$.on_destroy = component.$$.fragment = null;
-            component.$$.ctx = {};
+            $$.on_destroy = $$.fragment = null;
+            $$.ctx = [];
         }
     }
-    function make_dirty(component, key) {
-        if (!component.$$.dirty) {
+    function make_dirty(component, i) {
+        if (component.$$.dirty[0] === -1) {
             dirty_components.push(component);
             schedule_update();
-            component.$$.dirty = blank_object();
+            component.$$.dirty.fill(0);
         }
-        component.$$.dirty[key] = true;
+        component.$$.dirty[(i / 31) | 0] |= (1 << (i % 31));
     }
-    function init(component, options, instance, create_fragment, not_equal, prop_names) {
+    function init(component, options, instance, create_fragment, not_equal, props, dirty = [-1]) {
         const parent_component = current_component;
         set_current_component(component);
-        const props = options.props || {};
+        const prop_values = options.props || {};
         const $$ = component.$$ = {
             fragment: null,
             ctx: null,
             // state
-            props: prop_names,
+            props,
             update: noop,
             not_equal,
             bound: blank_object(),
@@ -374,31 +393,33 @@ var app = (function () {
             context: new Map(parent_component ? parent_component.$$.context : []),
             // everything else
             callbacks: blank_object(),
-            dirty: null
+            dirty
         };
         let ready = false;
         $$.ctx = instance
-            ? instance(component, props, (key, value) => {
-                if ($$.ctx && not_equal($$.ctx[key], $$.ctx[key] = value)) {
-                    if ($$.bound[key])
-                        $$.bound[key](value);
+            ? instance(component, prop_values, (i, ret, value = ret) => {
+                if ($$.ctx && not_equal($$.ctx[i], $$.ctx[i] = value)) {
+                    if ($$.bound[i])
+                        $$.bound[i](value);
                     if (ready)
-                        make_dirty(component, key);
+                        make_dirty(component, i);
                 }
+                return ret;
             })
-            : props;
+            : [];
         $$.update();
         ready = true;
         run_all($$.before_update);
-        $$.fragment = create_fragment($$.ctx);
+        // `false` as a special case of no DOM component
+        $$.fragment = create_fragment ? create_fragment($$.ctx) : false;
         if (options.target) {
             if (options.hydrate) {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                $$.fragment.l(children(options.target));
+                $$.fragment && $$.fragment.l(children(options.target));
             }
             else {
                 // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                $$.fragment.c();
+                $$.fragment && $$.fragment.c();
             }
             if (options.intro)
                 transition_in(component.$$.fragment);
@@ -424,6 +445,53 @@ var app = (function () {
         $set() {
             // overridden by instance, if it has props
         }
+    }
+
+    function dispatch_dev(type, detail) {
+        document.dispatchEvent(custom_event(type, detail));
+    }
+    function append_dev(target, node) {
+        dispatch_dev("SvelteDOMInsert", { target, node });
+        append(target, node);
+    }
+    function insert_dev(target, node, anchor) {
+        dispatch_dev("SvelteDOMInsert", { target, node, anchor });
+        insert(target, node, anchor);
+    }
+    function detach_dev(node) {
+        dispatch_dev("SvelteDOMRemove", { node });
+        detach(node);
+    }
+    function listen_dev(node, event, handler, options, has_prevent_default, has_stop_propagation) {
+        const modifiers = options === true ? ["capture"] : options ? Array.from(Object.keys(options)) : [];
+        if (has_prevent_default)
+            modifiers.push('preventDefault');
+        if (has_stop_propagation)
+            modifiers.push('stopPropagation');
+        dispatch_dev("SvelteDOMAddEventListener", { node, event, handler, modifiers });
+        const dispose = listen(node, event, handler, options);
+        return () => {
+            dispatch_dev("SvelteDOMRemoveEventListener", { node, event, handler, modifiers });
+            dispose();
+        };
+    }
+    function attr_dev(node, attribute, value) {
+        attr(node, attribute, value);
+        if (value == null)
+            dispatch_dev("SvelteDOMRemoveAttribute", { node, attribute });
+        else
+            dispatch_dev("SvelteDOMSetAttribute", { node, attribute, value });
+    }
+    function prop_dev(node, property, value) {
+        node[property] = value;
+        dispatch_dev("SvelteDOMSetProperty", { node, property, value });
+    }
+    function set_data_dev(text, data) {
+        data = '' + data;
+        if (text.data === data)
+            return;
+        dispatch_dev("SvelteDOMSetData", { node: text, data });
+        text.data = data;
     }
     class SvelteComponentDev extends SvelteComponent {
         constructor(options) {
@@ -501,13 +569,6 @@ var app = (function () {
         }
         return { set, update, subscribe };
     }
-    /**
-     * Derived value store by synchronizing one or more readable stores and
-     * applying an aggregation function over its input values.
-     * @param {Stores} stores input stores
-     * @param {function(Stores=, function(*)=):*}fn function callback that aggregates the values
-     * @param {*=}initial_value when used asynchronously
-     */
     function derived(stores, fn, initial_value) {
         const single = !Array.isArray(stores);
         const stores_array = single
@@ -1195,7 +1256,7 @@ var app = (function () {
           { name: 'Date',      test: function (x) { return x instanceof Date } },
           { name: 'RegExp',    test: function (x) { return x instanceof RegExp } },
           { name: 'Object',    test: function (x) {
-            return typeof x === 'object' && x.constructor === Object
+            return typeof x === 'object' && x !== null && x.constructor === Object
           }},
           { name: 'null',      test: function (x) { return x === null } },
           { name: 'undefined', test: function (x) { return x === undefined } }
@@ -3251,51 +3312,53 @@ var app = (function () {
           return toEngineering$1(value, precision);
 
         case 'auto':
-          // TODO: clean up some day. Deprecated since: 2018-01-24
-          // @deprecated upper and lower are replaced with upperExp and lowerExp since v4.0.0
-          if (options && options.exponential && (options.exponential.lower !== undefined || options.exponential.upper !== undefined)) {
-            var fixedOptions = mapObject(options, function (x) {
-              return x;
+          {
+            // TODO: clean up some day. Deprecated since: 2018-01-24
+            // @deprecated upper and lower are replaced with upperExp and lowerExp since v4.0.0
+            if (options && options.exponential && (options.exponential.lower !== undefined || options.exponential.upper !== undefined)) {
+              var fixedOptions = mapObject(options, function (x) {
+                return x;
+              });
+              fixedOptions.exponential = undefined;
+
+              if (options.exponential.lower !== undefined) {
+                fixedOptions.lowerExp = Math.round(Math.log(options.exponential.lower) / Math.LN10);
+              }
+
+              if (options.exponential.upper !== undefined) {
+                fixedOptions.upperExp = Math.round(Math.log(options.exponential.upper) / Math.LN10);
+              }
+
+              console.warn('Deprecation warning: Formatting options exponential.lower and exponential.upper ' + '(minimum and maximum value) ' + 'are replaced with exponential.lowerExp and exponential.upperExp ' + '(minimum and maximum exponent) since version 4.0.0. ' + 'Replace ' + JSON.stringify(options) + ' with ' + JSON.stringify(fixedOptions));
+              return format$1(value, fixedOptions);
+            } // determine lower and upper bound for exponential notation.
+            // TODO: implement support for upper and lower to be BigNumbers themselves
+
+
+            var lowerExp = options && options.lowerExp !== undefined ? options.lowerExp : -3;
+            var upperExp = options && options.upperExp !== undefined ? options.upperExp : 5; // handle special case zero
+
+            if (value.isZero()) return '0'; // determine whether or not to output exponential notation
+
+            var str;
+            var rounded = value.toSignificantDigits(precision);
+            var exp = rounded.e;
+
+            if (exp >= lowerExp && exp < upperExp) {
+              // normal number notation
+              str = rounded.toFixed();
+            } else {
+              // exponential notation
+              str = toExponential$1(value, precision);
+            } // remove trailing zeros after the decimal point
+
+
+            return str.replace(/((\.\d*?)(0+))($|e)/, function () {
+              var digits = arguments[2];
+              var e = arguments[4];
+              return digits !== '.' ? digits + e : e;
             });
-            fixedOptions.exponential = undefined;
-
-            if (options.exponential.lower !== undefined) {
-              fixedOptions.lowerExp = Math.round(Math.log(options.exponential.lower) / Math.LN10);
-            }
-
-            if (options.exponential.upper !== undefined) {
-              fixedOptions.upperExp = Math.round(Math.log(options.exponential.upper) / Math.LN10);
-            }
-
-            console.warn('Deprecation warning: Formatting options exponential.lower and exponential.upper ' + '(minimum and maximum value) ' + 'are replaced with exponential.lowerExp and exponential.upperExp ' + '(minimum and maximum exponent) since version 4.0.0. ' + 'Replace ' + JSON.stringify(options) + ' with ' + JSON.stringify(fixedOptions));
-            return format$1(value, fixedOptions);
-          } // determine lower and upper bound for exponential notation.
-          // TODO: implement support for upper and lower to be BigNumbers themselves
-
-
-          var lowerExp = options && options.lowerExp !== undefined ? options.lowerExp : -3;
-          var upperExp = options && options.upperExp !== undefined ? options.upperExp : 5; // handle special case zero
-
-          if (value.isZero()) return '0'; // determine whether or not to output exponential notation
-
-          var str;
-          var rounded = value.toSignificantDigits(precision);
-          var exp = rounded.e;
-
-          if (exp >= lowerExp && exp < upperExp) {
-            // normal number notation
-            str = rounded.toFixed();
-          } else {
-            // exponential notation
-            str = toExponential$1(value, precision);
-          } // remove trailing zeros after the decimal point
-
-
-          return str.replace(/((\.\d*?)(0+))($|e)/, function () {
-            var digits = arguments[2];
-            var e = arguments[4];
-            return digits !== '.' ? digits + e : e;
-          });
+          }
 
         default:
           throw new Error('Unknown notation "' + notation + '". ' + 'Choose "auto", "exponential", or "fixed".');
@@ -3432,9 +3495,9 @@ var app = (function () {
       if (value && _typeof$2(value) === 'object') {
         if (typeof value.format === 'function') {
           return value.format(options);
-        } else if (value && value.toString() !== {}.toString()) {
+        } else if (value && value.toString(options) !== {}.toString()) {
           // this object has a non-native toString method, use that one
-          return value.toString();
+          return value.toString(options);
         } else {
           var entries = Object.keys(value).map(function (key) {
             return '"' + key + '": ' + format$2(value[key], options);
@@ -4444,9 +4507,9 @@ var app = (function () {
         test: isSymbolNode
       }, {
         name: 'Object',
-        test: isObject // order 'Object' last, it matches on other classes too
-
-      }];
+        test: isObject
+      } // order 'Object' last, it matches on other classes too
+      ];
       typed.conversions = [{
         from: 'number',
         to: 'BigNumber',
@@ -4642,7 +4705,7 @@ var app = (function () {
     }
 
     function throwNoMatrix() {
-      throw new Error("Cannot convert array into a Matrix: no class 'DenseMatrix' provided");
+      throw new Error('Cannot convert array into a Matrix: no class \'DenseMatrix\' provided');
     }
 
     function throwNoFraction(x) {
@@ -11157,34 +11220,38 @@ var app = (function () {
       Complex.fromPolar = function (args) {
         switch (arguments.length) {
           case 1:
-            var arg = arguments[0];
+            {
+              var arg = arguments[0];
 
-            if (_typeof$3(arg) === 'object') {
-              return Complex(arg);
+              if (_typeof$3(arg) === 'object') {
+                return Complex(arg);
+              } else {
+                throw new TypeError('Input has to be an object with r and phi keys.');
+              }
             }
 
-            throw new TypeError('Input has to be an object with r and phi keys.');
-
           case 2:
-            var r = arguments[0];
-            var phi = arguments[1];
+            {
+              var r = arguments[0];
+              var phi = arguments[1];
 
-            if (isNumber(r)) {
-              if (isUnit(phi) && phi.hasBase('ANGLE')) {
-                // convert unit to a number in radians
-                phi = phi.toNumber('rad');
+              if (isNumber(r)) {
+                if (isUnit(phi) && phi.hasBase('ANGLE')) {
+                  // convert unit to a number in radians
+                  phi = phi.toNumber('rad');
+                }
+
+                if (isNumber(phi)) {
+                  return new Complex({
+                    r: r,
+                    phi: phi
+                  });
+                }
+
+                throw new TypeError('Phi is not a number nor an angle unit.');
+              } else {
+                throw new TypeError('Radius r is not a number.');
               }
-
-              if (isNumber(phi)) {
-                return new Complex({
-                  r: r,
-                  phi: phi
-                });
-              }
-
-              throw new TypeError('Phi is not a number nor an angle unit.');
-            } else {
-              throw new TypeError('Radius r is not a number.');
             }
 
           default:
@@ -14568,7 +14635,7 @@ var app = (function () {
        * Examples:
        *
        *    math.isNumeric(2)                     // returns true
-       *    math.isNumeric('2')                   // returns true
+       *    math.isNumeric('2')                   // returns false
        *    math.hasNumericValue('2')             // returns true
        *    math.isNumeric(0)                     // returns true
        *    math.isNumeric(math.bignumber(500))   // returns true
@@ -20927,12 +20994,13 @@ var app = (function () {
     });
 
     var name$V = 'sign';
-    var dependencies$W = ['typed', 'BigNumber', 'Fraction'];
+    var dependencies$W = ['typed', 'BigNumber', 'Fraction', 'complex'];
     var createSign =
     /* #__PURE__ */
     factory(name$V, dependencies$W, function (_ref) {
       var typed = _ref.typed,
           _BigNumber = _ref.BigNumber,
+          complex = _ref.complex,
           _Fraction = _ref.Fraction;
 
       /**
@@ -20968,7 +21036,7 @@ var app = (function () {
       var sign = typed(name$V, {
         number: signNumber,
         Complex: function Complex(x) {
-          return x.sign();
+          return x.im === 0 ? complex(signNumber(x.re)) : x.sign();
         },
         BigNumber: function BigNumber(x) {
           return new _BigNumber(x.cmp(0));
@@ -24960,7 +25028,7 @@ var app = (function () {
 
 
     function isSafeMethod(object, method) {
-      if (!object || typeof object[method] !== 'function') {
+      if (object === null || object === undefined || typeof object[method] !== 'function') {
         return false;
       } // UNSAFE: ghosted
       // e.g overridden toString
@@ -25273,26 +25341,27 @@ var app = (function () {
               break;
 
             case 2:
-              // rows and columns
-              var rows = size[0];
-              var columns = size[1]; // check columns
+              {
+                // rows and columns
+                var rows = size[0];
+                var columns = size[1]; // check columns
 
-              if (columns === 0) {
-                // throw exception
-                throw new RangeError('Cannot transpose a 2D matrix with no columns (size: ' + format$2(size) + ')');
-              } // process storage format
+                if (columns === 0) {
+                  // throw exception
+                  throw new RangeError('Cannot transpose a 2D matrix with no columns (size: ' + format$2(size) + ')');
+                } // process storage format
 
 
-              switch (x.storage()) {
-                case 'dense':
-                  c = _denseTranspose(x, rows, columns);
-                  break;
+                switch (x.storage()) {
+                  case 'dense':
+                    c = _denseTranspose(x, rows, columns);
+                    break;
 
-                case 'sparse':
-                  c = _sparseTranspose(x, rows, columns);
-                  break;
+                  case 'sparse':
+                    c = _sparseTranspose(x, rows, columns);
+                    break;
+                }
               }
-
               break;
 
             default:
@@ -26226,41 +26295,36 @@ var app = (function () {
        */
       var isPrime = typed(name$1E, {
         number: function number(x) {
-          if (x < 2) {
+          if (x * 0 !== 0) {
             return false;
           }
 
-          if (x === 2) {
-            return true;
+          if (x <= 3) {
+            return x > 1;
           }
 
-          if (x % 2 === 0) {
+          if (x % 2 === 0 || x % 3 === 0) {
             return false;
           }
 
-          for (var i = 3; i * i <= x; i += 2) {
-            if (x % i === 0) {
+          for (var i = 5; i * i <= x; i += 6) {
+            if (x % i === 0 || x % (i + 2) === 0) {
               return false;
             }
           }
 
           return true;
         },
-        BigNumber: function BigNumber(x) {
-          if (x.lt(2)) {
+        BigNumber: function BigNumber(n) {
+          if (n.toNumber() * 0 !== 0) {
             return false;
           }
 
-          if (x.equals(2)) {
-            return true;
-          }
+          if (n.lte(3)) return n.gt(1);
+          if (n.mod(2).eq(0) || n.mod(3).eq(0)) return false;
 
-          if (x.mod(2).isZero()) {
-            return false;
-          }
-
-          for (var i = new x.constructor(3); i.times(i).lte(x); i = i.plus(1)) {
-            if (x.mod(i).isZero()) {
+          for (var i = 5; n.gte(i * i); i += 6) {
+            if (n.mod(i).eq(0) || n.mod(i + 2).eq(0)) {
               return false;
             }
           }
@@ -26286,9 +26350,9 @@ var app = (function () {
         string: true,
         number: true,
         BigNumber: true,
-        Fraction: true // Load the conversion functions for each output type
+        Fraction: true
+      }; // Load the conversion functions for each output type
 
-      };
       var validOutputTypes = {
         number: function number(x) {
           return _number(x);
@@ -26299,36 +26363,36 @@ var app = (function () {
         Fraction: fraction ? function (x) {
           return fraction(x);
         } : noFraction
-        /**
-         * Convert a numeric input to a specific numeric type: number, BigNumber, or Fraction.
-         *
-         * Syntax:
-         *
-         *    math.numeric(x)
-         *
-         * Examples:
-         *
-         *    math.numeric('4')                           // returns number 4
-         *    math.numeric('4', 'number')                 // returns number 4
-         *    math.numeric('4', 'BigNumber')              // returns BigNumber 4
-         *    math.numeric('4', 'Fraction')               // returns Fraction 4
-         *    math.numeric(4, 'Fraction')                 // returns Fraction 4
-         *    math.numeric(math.fraction(2, 5), 'number') // returns number 0.4
-         *
-         * See also:
-         *
-         *    number, fraction, bignumber, string, format
-         *
-         * @param {string | number | BigNumber | Fraction } value
-         *              A numeric value or a string containing a numeric value
-         * @param {string} outputType
-         *              Desired numeric output type.
-         *              Available values: 'number', 'BigNumber', or 'Fraction'
-         * @return {number | BigNumber | Fraction}
-         *              Returns an instance of the numeric in the requested type
-         */
-
       };
+      /**
+       * Convert a numeric input to a specific numeric type: number, BigNumber, or Fraction.
+       *
+       * Syntax:
+       *
+       *    math.numeric(x)
+       *
+       * Examples:
+       *
+       *    math.numeric('4')                           // returns number 4
+       *    math.numeric('4', 'number')                 // returns number 4
+       *    math.numeric('4', 'BigNumber')              // returns BigNumber 4
+       *    math.numeric('4', 'Fraction')               // returns Fraction 4
+       *    math.numeric(4, 'Fraction')                 // returns Fraction 4
+       *    math.numeric(math.fraction(2, 5), 'number') // returns number 0.4
+       *
+       * See also:
+       *
+       *    number, fraction, bignumber, string, format
+       *
+       * @param {string | number | BigNumber | Fraction } value
+       *              A numeric value or a string containing a numeric value
+       * @param {string} outputType
+       *              Desired numeric output type.
+       *              Available values: 'number', 'BigNumber', or 'Fraction'
+       * @return {number | BigNumber | Fraction}
+       *              Returns an instance of the numeric in the requested type
+       */
+
       return function numeric(value, outputType) {
         var inputType = typeOf(value);
 
@@ -30532,19 +30596,21 @@ var app = (function () {
       ImmutableDenseMatrix.prototype.subset = function (index) {
         switch (arguments.length) {
           case 1:
-            // use base implementation
-            var m = DenseMatrix.prototype.subset.call(this, index); // check result is a matrix
+            {
+              // use base implementation
+              var m = DenseMatrix.prototype.subset.call(this, index); // check result is a matrix
 
-            if (isMatrix(m)) {
-              // return immutable matrix
-              return new ImmutableDenseMatrix({
-                data: m._data,
-                size: m._size,
-                datatype: m._datatype
-              });
+              if (isMatrix(m)) {
+                // return immutable matrix
+                return new ImmutableDenseMatrix({
+                  data: m._data,
+                  size: m._size,
+                  datatype: m._datatype
+                });
+              }
+
+              return m;
             }
-
-            return m;
           // intentional fall through
 
           case 2:
@@ -31039,9 +31105,8 @@ var app = (function () {
         var node = {
           key: key,
           value: value,
-          degree: 0 // check we have a node in the minimum
-
-        };
+          degree: 0
+        }; // check we have a node in the minimum
 
         if (this._minimum) {
           // minimum node
@@ -32402,7 +32467,7 @@ var app = (function () {
 
         for (var i in ret.units) {
           if (ret.units[i].unit.name === 'VA' || ret.units[i].unit.name === 'VAR') {
-            ret.units[i].unit = UNITS['W'];
+            ret.units[i].unit = UNITS.W;
           }
         }
 
@@ -32621,10 +32686,10 @@ var app = (function () {
           var baseDim = BASE_DIMENSIONS[i];
 
           if (Math.abs(ret.dimensions[i] || 0) > 1e-12) {
-            if (hasOwnProperty(UNIT_SYSTEMS['si'], baseDim)) {
+            if (hasOwnProperty(UNIT_SYSTEMS.si, baseDim)) {
               proposedUnitList.push({
-                unit: UNIT_SYSTEMS['si'][baseDim].unit,
-                prefix: UNIT_SYSTEMS['si'][baseDim].prefix,
+                unit: UNIT_SYSTEMS.si[baseDim].unit,
+                prefix: UNIT_SYSTEMS.si[baseDim].prefix,
                 power: ret.dimensions[i] || 0
               });
             } else {
@@ -32729,9 +32794,9 @@ var app = (function () {
         for (var i in simp.units) {
           if (simp.units[i].unit) {
             if (simp.units[i].unit.name === 'VA' && isImaginary) {
-              simp.units[i].unit = UNITS['VAR'];
+              simp.units[i].unit = UNITS.VAR;
             } else if (simp.units[i].unit.name === 'VAR' && !isImaginary) {
-              simp.units[i].unit = UNITS['VA'];
+              simp.units[i].unit = UNITS.VA;
             }
           }
         } // Now apply the best prefix
@@ -33518,9 +33583,9 @@ var app = (function () {
           }
         }
       };
-      PREFIXES.SHORTLONG = _extends$1(PREFIXES.SHORT, PREFIXES.LONG);
-      PREFIXES.BINARY_SHORT = _extends$1(PREFIXES.BINARY_SHORT_SI, PREFIXES.BINARY_SHORT_IEC);
-      PREFIXES.BINARY_LONG = _extends$1(PREFIXES.BINARY_LONG_SI, PREFIXES.BINARY_LONG_IEC);
+      PREFIXES.SHORTLONG = _extends$1({}, PREFIXES.SHORT, PREFIXES.LONG);
+      PREFIXES.BINARY_SHORT = _extends$1({}, PREFIXES.BINARY_SHORT_SI, PREFIXES.BINARY_SHORT_IEC);
+      PREFIXES.BINARY_LONG = _extends$1({}, PREFIXES.BINARY_LONG_SI, PREFIXES.BINARY_LONG_IEC);
       /* Internally, each unit is represented by a value and a dimension array. The elements of the dimensions array have the following meaning:
        * Index  Dimension
        * -----  ---------
@@ -34870,9 +34935,9 @@ var app = (function () {
           prefixes: PREFIXES.BINARY_LONG,
           value: 8,
           offset: 0
-        } // aliases (formerly plurals)
+        }
+      }; // aliases (formerly plurals)
 
-      };
       var ALIASES = {
         meters: 'meter',
         inches: 'inch',
@@ -34956,14 +35021,15 @@ var app = (function () {
         webers: 'weber',
         teslas: 'tesla',
         electronvolts: 'electronvolt',
-        moles: 'mole'
-        /**
-         * Calculate the values for the angle units.
-         * Value is calculated as number or BigNumber depending on the configuration
-         * @param {{number: 'number' | 'BigNumber'}} config
-         */
-
+        moles: 'mole',
+        bit: 'bits',
+        "byte": 'bytes'
       };
+      /**
+       * Calculate the values for the angle units.
+       * Value is calculated as number or BigNumber depending on the configuration
+       * @param {{number: 'number' | 'BigNumber'}} config
+       */
 
       function calculateAngleValues(config) {
         if (config.number === 'BigNumber') {
@@ -35029,7 +35095,7 @@ var app = (function () {
           },
           MASS: {
             unit: UNITS.g,
-            prefix: PREFIXES.SHORT['k']
+            prefix: PREFIXES.SHORT.k
           },
           TIME: {
             unit: UNITS.s,
@@ -35056,7 +35122,7 @@ var app = (function () {
             prefix: PREFIXES.SHORT['']
           },
           BIT: {
-            unit: UNITS.bit,
+            unit: UNITS.bits,
             prefix: PREFIXES.SHORT['']
           },
           // Derived units
@@ -35112,13 +35178,13 @@ var app = (function () {
             unit: UNITS.Hz,
             prefix: PREFIXES.SHORT['']
           }
-        } // Clone to create the other unit systems
+        }
+      }; // Clone to create the other unit systems
 
-      };
       UNIT_SYSTEMS.cgs = JSON.parse(JSON.stringify(UNIT_SYSTEMS.si));
       UNIT_SYSTEMS.cgs.LENGTH = {
         unit: UNITS.m,
-        prefix: PREFIXES.SHORT['c']
+        prefix: PREFIXES.SHORT.c
       };
       UNIT_SYSTEMS.cgs.MASS = {
         unit: UNITS.g,
@@ -35130,10 +35196,10 @@ var app = (function () {
       };
       UNIT_SYSTEMS.cgs.ENERGY = {
         unit: UNITS.erg,
-        prefix: PREFIXES.NONE[''] // there are wholly 4 unique cgs systems for electricity and magnetism,
-        // so let's not worry about it unless somebody complains
+        prefix: PREFIXES.NONE['']
+      }; // there are wholly 4 unique cgs systems for electricity and magnetism,
+      // so let's not worry about it unless somebody complains
 
-      };
       UNIT_SYSTEMS.us = JSON.parse(JSON.stringify(UNIT_SYSTEMS.si));
       UNIT_SYSTEMS.us.LENGTH = {
         unit: UNITS.ft,
@@ -35161,10 +35227,10 @@ var app = (function () {
       };
       UNIT_SYSTEMS.us.PRESSURE = {
         unit: UNITS.psi,
-        prefix: PREFIXES.NONE[''] // Add additional unit systems here.
-        // Choose a unit system to seed the auto unit system.
+        prefix: PREFIXES.NONE['']
+      }; // Add additional unit systems here.
+      // Choose a unit system to seed the auto unit system.
 
-      };
       UNIT_SYSTEMS.auto = JSON.parse(JSON.stringify(UNIT_SYSTEMS.si)); // Set the current unit system
 
       var currentUnitSystem = UNIT_SYSTEMS.auto;
@@ -35212,16 +35278,15 @@ var app = (function () {
         number: function number(x) {
           return x;
         }
-        /**
-         * Retrieve the right convertor function corresponding with the type
-         * of provided exampleValue.
-         *
-         * @param {string} type   A string 'number', 'BigNumber', or 'Fraction'
-         *                        In case of an unknown type,
-         * @return {Function}
-         */
-
       };
+      /**
+       * Retrieve the right convertor function corresponding with the type
+       * of provided exampleValue.
+       *
+       * @param {string} type   A string 'number', 'BigNumber', or 'Fraction'
+       *                        In case of an unknown type,
+       * @return {Function}
+       */
 
       Unit._getNumberConverter = function (type) {
         if (!Unit.typeConverters[type]) {
@@ -35464,9 +35529,9 @@ var app = (function () {
             value: defUnit.value,
             dimensions: defUnit.dimensions.slice(0),
             prefixes: prefixes,
-            offset: offset // Create a new base if no matching base exists
+            offset: offset
+          }; // Create a new base if no matching base exists
 
-          };
           var anyMatch = false;
 
           for (var _i7 in BASE_UNITS) {
@@ -38258,23 +38323,25 @@ var app = (function () {
             throw new RangeError('Matrix must be square (size: ' + format$2(size) + ')');
 
           case 2:
-            // two dimensional
-            var rows = size[0];
-            var cols = size[1];
+            {
+              // two dimensional
+              var rows = size[0];
+              var cols = size[1];
 
-            if (rows === cols) {
-              // calulate sum
-              var sum = 0; // loop diagonal
+              if (rows === cols) {
+                // calulate sum
+                var sum = 0; // loop diagonal
 
-              for (var i = 0; i < rows; i++) {
-                sum = add(sum, data[i][i]);
-              } // return trace
+                for (var i = 0; i < rows; i++) {
+                  sum = add(sum, data[i][i]);
+                } // return trace
 
 
-              return sum;
+                return sum;
+              } else {
+                throw new RangeError('Matrix must be square (size: ' + format$2(size) + ')');
+              }
             }
-
-            throw new RangeError('Matrix must be square (size: ' + format$2(size) + ')');
 
           default:
             // multi dimensional
@@ -39066,7 +39133,7 @@ var app = (function () {
         var object = this.object.toTex(options);
 
         if (needParenthesis(this.object)) {
-          object = "\\left(' + object + '\\right)";
+          object = '\\left(\' + object + \'\\right)';
         }
 
         return object + this.index.toTex(options);
@@ -40472,6 +40539,7 @@ var app = (function () {
       return result;
     };
 
+    /* eslint no-template-curly-in-string: "off" */
     var latexSymbols = {
       // GREEK LETTERS
       Alpha: 'A',
@@ -40585,301 +40653,304 @@ var app = (function () {
     var latexFunctions = {
       // arithmetic
       abs: {
-        1: "\\left|${args[0]}\\right|"
+        1: '\\left|${args[0]}\\right|'
       },
       add: {
-        2: "\\left(${args[0]}".concat(latexOperators['add'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.add, "${args[1]}\\right)")
       },
       cbrt: {
-        1: "\\sqrt[3]{${args[0]}}"
+        1: '\\sqrt[3]{${args[0]}}'
       },
       ceil: {
-        1: "\\left\\lceil${args[0]}\\right\\rceil"
+        1: '\\left\\lceil${args[0]}\\right\\rceil'
       },
       cube: {
-        1: "\\left(${args[0]}\\right)^3"
+        1: '\\left(${args[0]}\\right)^3'
       },
       divide: {
-        2: "\\frac{${args[0]}}{${args[1]}}"
+        2: '\\frac{${args[0]}}{${args[1]}}'
       },
       dotDivide: {
-        2: "\\left(${args[0]}".concat(latexOperators['dotDivide'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.dotDivide, "${args[1]}\\right)")
       },
       dotMultiply: {
-        2: "\\left(${args[0]}".concat(latexOperators['dotMultiply'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.dotMultiply, "${args[1]}\\right)")
       },
       dotPow: {
-        2: "\\left(${args[0]}".concat(latexOperators['dotPow'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.dotPow, "${args[1]}\\right)")
       },
       exp: {
-        1: "\\exp\\left(${args[0]}\\right)"
+        1: '\\exp\\left(${args[0]}\\right)'
       },
-      expm1: "\\left(e".concat(latexOperators['pow'], "{${args[0]}}-1\\right)"),
+      expm1: "\\left(e".concat(latexOperators.pow, "{${args[0]}}-1\\right)"),
       fix: {
-        1: "\\mathrm{${name}}\\left(${args[0]}\\right)"
+        1: '\\mathrm{${name}}\\left(${args[0]}\\right)'
       },
       floor: {
-        1: "\\left\\lfloor${args[0]}\\right\\rfloor"
+        1: '\\left\\lfloor${args[0]}\\right\\rfloor'
       },
-      gcd: "\\gcd\\left(${args}\\right)",
-      hypot: "\\hypot\\left(${args}\\right)",
+      gcd: '\\gcd\\left(${args}\\right)',
+      hypot: '\\hypot\\left(${args}\\right)',
       log: {
-        1: "\\ln\\left(${args[0]}\\right)",
-        2: "\\log_{${args[1]}}\\left(${args[0]}\\right)"
+        1: '\\ln\\left(${args[0]}\\right)',
+        2: '\\log_{${args[1]}}\\left(${args[0]}\\right)'
       },
       log10: {
-        1: "\\log_{10}\\left(${args[0]}\\right)"
+        1: '\\log_{10}\\left(${args[0]}\\right)'
       },
       log1p: {
-        1: "\\ln\\left(${args[0]}+1\\right)",
-        2: "\\log_{${args[1]}}\\left(${args[0]}+1\\right)"
+        1: '\\ln\\left(${args[0]}+1\\right)',
+        2: '\\log_{${args[1]}}\\left(${args[0]}+1\\right)'
       },
-      log2: "\\log_{2}\\left(${args[0]}\\right)",
+      log2: '\\log_{2}\\left(${args[0]}\\right)',
       mod: {
-        2: "\\left(${args[0]}".concat(latexOperators['mod'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.mod, "${args[1]}\\right)")
       },
       multiply: {
-        2: "\\left(${args[0]}".concat(latexOperators['multiply'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.multiply, "${args[1]}\\right)")
       },
       norm: {
-        1: "\\left\\|${args[0]}\\right\\|",
+        1: '\\left\\|${args[0]}\\right\\|',
         2: undefined // use default template
 
       },
       nthRoot: {
-        2: "\\sqrt[${args[1]}]{${args[0]}}"
+        2: '\\sqrt[${args[1]}]{${args[0]}}'
       },
       nthRoots: {
-        2: "\\{y : $y^{args[1]} = {${args[0]}}\\}"
+        2: '\\{y : $y^{args[1]} = {${args[0]}}\\}'
       },
       pow: {
-        2: "\\left(${args[0]}\\right)".concat(latexOperators['pow'], "{${args[1]}}")
+        2: "\\left(${args[0]}\\right)".concat(latexOperators.pow, "{${args[1]}}")
       },
       round: {
-        1: "\\left\\lfloor${args[0]}\\right\\rceil",
+        1: '\\left\\lfloor${args[0]}\\right\\rceil',
         2: undefined // use default template
 
       },
       sign: {
-        1: "\\mathrm{${name}}\\left(${args[0]}\\right)"
+        1: '\\mathrm{${name}}\\left(${args[0]}\\right)'
       },
       sqrt: {
-        1: "\\sqrt{${args[0]}}"
+        1: '\\sqrt{${args[0]}}'
       },
       square: {
-        1: "\\left(${args[0]}\\right)^2"
+        1: '\\left(${args[0]}\\right)^2'
       },
       subtract: {
-        2: "\\left(${args[0]}".concat(latexOperators['subtract'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.subtract, "${args[1]}\\right)")
       },
       unaryMinus: {
-        1: "".concat(latexOperators['unaryMinus'], "\\left(${args[0]}\\right)")
+        1: "".concat(latexOperators.unaryMinus, "\\left(${args[0]}\\right)")
       },
       unaryPlus: {
-        1: "".concat(latexOperators['unaryPlus'], "\\left(${args[0]}\\right)")
+        1: "".concat(latexOperators.unaryPlus, "\\left(${args[0]}\\right)")
       },
       // bitwise
       bitAnd: {
-        2: "\\left(${args[0]}".concat(latexOperators['bitAnd'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.bitAnd, "${args[1]}\\right)")
       },
       bitNot: {
-        1: latexOperators['bitNot'] + "\\left(${args[0]}\\right)"
+        1: latexOperators.bitNot + '\\left(${args[0]}\\right)'
       },
       bitOr: {
-        2: "\\left(${args[0]}".concat(latexOperators['bitOr'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.bitOr, "${args[1]}\\right)")
       },
       bitXor: {
-        2: "\\left(${args[0]}".concat(latexOperators['bitXor'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.bitXor, "${args[1]}\\right)")
       },
       leftShift: {
-        2: "\\left(${args[0]}".concat(latexOperators['leftShift'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.leftShift, "${args[1]}\\right)")
       },
       rightArithShift: {
-        2: "\\left(${args[0]}".concat(latexOperators['rightArithShift'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.rightArithShift, "${args[1]}\\right)")
       },
       rightLogShift: {
-        2: "\\left(${args[0]}".concat(latexOperators['rightLogShift'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.rightLogShift, "${args[1]}\\right)")
       },
       // combinatorics
       bellNumbers: {
-        1: "\\mathrm{B}_{${args[0]}}"
+        1: '\\mathrm{B}_{${args[0]}}'
       },
       catalan: {
-        1: "\\mathrm{C}_{${args[0]}}"
+        1: '\\mathrm{C}_{${args[0]}}'
       },
       stirlingS2: {
-        2: "\\mathrm{S}\\left(${args}\\right)"
+        2: '\\mathrm{S}\\left(${args}\\right)'
       },
       // complex
       arg: {
-        1: "\\arg\\left(${args[0]}\\right)"
+        1: '\\arg\\left(${args[0]}\\right)'
       },
       conj: {
-        1: "\\left(${args[0]}\\right)^*"
+        1: '\\left(${args[0]}\\right)^*'
       },
       im: {
-        1: "\\Im\\left\\lbrace${args[0]}\\right\\rbrace"
+        1: '\\Im\\left\\lbrace${args[0]}\\right\\rbrace'
       },
       re: {
-        1: "\\Re\\left\\lbrace${args[0]}\\right\\rbrace"
+        1: '\\Re\\left\\lbrace${args[0]}\\right\\rbrace'
       },
       // logical
       and: {
-        2: "\\left(${args[0]}".concat(latexOperators['and'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.and, "${args[1]}\\right)")
       },
       not: {
-        1: latexOperators['not'] + "\\left(${args[0]}\\right)"
+        1: latexOperators.not + '\\left(${args[0]}\\right)'
       },
       or: {
-        2: "\\left(${args[0]}".concat(latexOperators['or'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.or, "${args[1]}\\right)")
       },
       xor: {
-        2: "\\left(${args[0]}".concat(latexOperators['xor'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.xor, "${args[1]}\\right)")
       },
       // matrix
       cross: {
-        2: "\\left(${args[0]}\\right)\\times\\left(${args[1]}\\right)"
+        2: '\\left(${args[0]}\\right)\\times\\left(${args[1]}\\right)'
       },
       ctranspose: {
-        1: "\\left(${args[0]}\\right)".concat(latexOperators['ctranspose'])
+        1: "\\left(${args[0]}\\right)".concat(latexOperators.ctranspose)
       },
       det: {
-        1: "\\det\\left(${args[0]}\\right)"
+        1: '\\det\\left(${args[0]}\\right)'
       },
       dot: {
-        2: "\\left(${args[0]}\\cdot${args[1]}\\right)"
+        2: '\\left(${args[0]}\\cdot${args[1]}\\right)'
       },
       expm: {
-        1: "\\exp\\left(${args[0]}\\right)"
+        1: '\\exp\\left(${args[0]}\\right)'
       },
       inv: {
-        1: "\\left(${args[0]}\\right)^{-1}"
+        1: '\\left(${args[0]}\\right)^{-1}'
       },
       sqrtm: {
-        1: "{${args[0]}}".concat(latexOperators['pow'], "{\\frac{1}{2}}")
+        1: "{${args[0]}}".concat(latexOperators.pow, "{\\frac{1}{2}}")
       },
       trace: {
-        1: "\\mathrm{tr}\\left(${args[0]}\\right)"
+        1: '\\mathrm{tr}\\left(${args[0]}\\right)'
       },
       transpose: {
-        1: "\\left(${args[0]}\\right)".concat(latexOperators['transpose'])
+        1: "\\left(${args[0]}\\right)".concat(latexOperators.transpose)
       },
       // probability
       combinations: {
-        2: "\\binom{${args[0]}}{${args[1]}}"
+        2: '\\binom{${args[0]}}{${args[1]}}'
+      },
+      combinationsWithRep: {
+        2: '\\left(\\!\\!{\\binom{${args[0]}}{${args[1]}}}\\!\\!\\right)'
       },
       factorial: {
-        1: "\\left(${args[0]}\\right)".concat(latexOperators['factorial'])
+        1: "\\left(${args[0]}\\right)".concat(latexOperators.factorial)
       },
       gamma: {
-        1: "\\Gamma\\left(${args[0]}\\right)"
+        1: '\\Gamma\\left(${args[0]}\\right)'
       },
       // relational
       equal: {
-        2: "\\left(${args[0]}".concat(latexOperators['equal'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.equal, "${args[1]}\\right)")
       },
       larger: {
-        2: "\\left(${args[0]}".concat(latexOperators['larger'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.larger, "${args[1]}\\right)")
       },
       largerEq: {
-        2: "\\left(${args[0]}".concat(latexOperators['largerEq'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.largerEq, "${args[1]}\\right)")
       },
       smaller: {
-        2: "\\left(${args[0]}".concat(latexOperators['smaller'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.smaller, "${args[1]}\\right)")
       },
       smallerEq: {
-        2: "\\left(${args[0]}".concat(latexOperators['smallerEq'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.smallerEq, "${args[1]}\\right)")
       },
       unequal: {
-        2: "\\left(${args[0]}".concat(latexOperators['unequal'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.unequal, "${args[1]}\\right)")
       },
       // special
       erf: {
-        1: "erf\\left(${args[0]}\\right)"
+        1: 'erf\\left(${args[0]}\\right)'
       },
       // statistics
-      max: "\\max\\left(${args}\\right)",
-      min: "\\min\\left(${args}\\right)",
-      variance: "\\mathrm{Var}\\left(${args}\\right)",
+      max: '\\max\\left(${args}\\right)',
+      min: '\\min\\left(${args}\\right)',
+      variance: '\\mathrm{Var}\\left(${args}\\right)',
       // trigonometry
       acos: {
-        1: "\\cos^{-1}\\left(${args[0]}\\right)"
+        1: '\\cos^{-1}\\left(${args[0]}\\right)'
       },
       acosh: {
-        1: "\\cosh^{-1}\\left(${args[0]}\\right)"
+        1: '\\cosh^{-1}\\left(${args[0]}\\right)'
       },
       acot: {
-        1: "\\cot^{-1}\\left(${args[0]}\\right)"
+        1: '\\cot^{-1}\\left(${args[0]}\\right)'
       },
       acoth: {
-        1: "\\coth^{-1}\\left(${args[0]}\\right)"
+        1: '\\coth^{-1}\\left(${args[0]}\\right)'
       },
       acsc: {
-        1: "\\csc^{-1}\\left(${args[0]}\\right)"
+        1: '\\csc^{-1}\\left(${args[0]}\\right)'
       },
       acsch: {
-        1: "\\mathrm{csch}^{-1}\\left(${args[0]}\\right)"
+        1: '\\mathrm{csch}^{-1}\\left(${args[0]}\\right)'
       },
       asec: {
-        1: "\\sec^{-1}\\left(${args[0]}\\right)"
+        1: '\\sec^{-1}\\left(${args[0]}\\right)'
       },
       asech: {
-        1: "\\mathrm{sech}^{-1}\\left(${args[0]}\\right)"
+        1: '\\mathrm{sech}^{-1}\\left(${args[0]}\\right)'
       },
       asin: {
-        1: "\\sin^{-1}\\left(${args[0]}\\right)"
+        1: '\\sin^{-1}\\left(${args[0]}\\right)'
       },
       asinh: {
-        1: "\\sinh^{-1}\\left(${args[0]}\\right)"
+        1: '\\sinh^{-1}\\left(${args[0]}\\right)'
       },
       atan: {
-        1: "\\tan^{-1}\\left(${args[0]}\\right)"
+        1: '\\tan^{-1}\\left(${args[0]}\\right)'
       },
       atan2: {
-        2: "\\mathrm{atan2}\\left(${args}\\right)"
+        2: '\\mathrm{atan2}\\left(${args}\\right)'
       },
       atanh: {
-        1: "\\tanh^{-1}\\left(${args[0]}\\right)"
+        1: '\\tanh^{-1}\\left(${args[0]}\\right)'
       },
       cos: {
-        1: "\\cos\\left(${args[0]}\\right)"
+        1: '\\cos\\left(${args[0]}\\right)'
       },
       cosh: {
-        1: "\\cosh\\left(${args[0]}\\right)"
+        1: '\\cosh\\left(${args[0]}\\right)'
       },
       cot: {
-        1: "\\cot\\left(${args[0]}\\right)"
+        1: '\\cot\\left(${args[0]}\\right)'
       },
       coth: {
-        1: "\\coth\\left(${args[0]}\\right)"
+        1: '\\coth\\left(${args[0]}\\right)'
       },
       csc: {
-        1: "\\csc\\left(${args[0]}\\right)"
+        1: '\\csc\\left(${args[0]}\\right)'
       },
       csch: {
-        1: "\\mathrm{csch}\\left(${args[0]}\\right)"
+        1: '\\mathrm{csch}\\left(${args[0]}\\right)'
       },
       sec: {
-        1: "\\sec\\left(${args[0]}\\right)"
+        1: '\\sec\\left(${args[0]}\\right)'
       },
       sech: {
-        1: "\\mathrm{sech}\\left(${args[0]}\\right)"
+        1: '\\mathrm{sech}\\left(${args[0]}\\right)'
       },
       sin: {
-        1: "\\sin\\left(${args[0]}\\right)"
+        1: '\\sin\\left(${args[0]}\\right)'
       },
       sinh: {
-        1: "\\sinh\\left(${args[0]}\\right)"
+        1: '\\sinh\\left(${args[0]}\\right)'
       },
       tan: {
-        1: "\\tan\\left(${args[0]}\\right)"
+        1: '\\tan\\left(${args[0]}\\right)'
       },
       tanh: {
-        1: "\\tanh\\left(${args[0]}\\right)"
+        1: '\\tanh\\left(${args[0]}\\right)'
       },
       // unit
       to: {
-        2: "\\left(${args[0]}".concat(latexOperators['to'], "${args[1]}\\right)")
+        2: "\\left(${args[0]}".concat(latexOperators.to, "${args[1]}\\right)")
       },
       // utils
       numeric: function numeric(node, options) {
@@ -40888,38 +40959,38 @@ var app = (function () {
       },
       // type
       number: {
-        0: "0",
-        1: "\\left(${args[0]}\\right)",
-        2: "\\left(\\left(${args[0]}\\right)${args[1]}\\right)"
+        0: '0',
+        1: '\\left(${args[0]}\\right)',
+        2: '\\left(\\left(${args[0]}\\right)${args[1]}\\right)'
       },
       string: {
         0: '\\mathtt{""}',
-        1: "\\mathrm{string}\\left(${args[0]}\\right)"
+        1: '\\mathrm{string}\\left(${args[0]}\\right)'
       },
       bignumber: {
         0: '0',
-        1: "\\left(${args[0]}\\right)"
+        1: '\\left(${args[0]}\\right)'
       },
       complex: {
         0: '0',
-        1: "\\left(${args[0]}\\right)",
-        2: "\\left(\\left(${args[0]}\\right)+".concat(latexSymbols['i'], "\\cdot\\left(${args[1]}\\right)\\right)")
+        1: '\\left(${args[0]}\\right)',
+        2: "\\left(\\left(${args[0]}\\right)+".concat(latexSymbols.i, "\\cdot\\left(${args[1]}\\right)\\right)")
       },
       matrix: {
         0: '\\begin{bmatrix}\\end{bmatrix}',
-        1: "\\left(${args[0]}\\right)",
-        2: "\\left(${args[0]}\\right)"
+        1: '\\left(${args[0]}\\right)',
+        2: '\\left(${args[0]}\\right)'
       },
       sparse: {
         0: '\\begin{bsparse}\\end{bsparse}',
-        1: "\\left(${args[0]}\\right)"
+        1: '\\left(${args[0]}\\right)'
       },
       unit: {
-        1: "\\left(${args[0]}\\right)",
-        2: "\\left(\\left(${args[0]}\\right)${args[1]}\\right)"
+        1: '\\left(${args[0]}\\right)',
+        2: '\\left(\\left(${args[0]}\\right)${args[1]}\\right)'
       }
     };
-    var defaultTemplate = "\\mathrm{${name}}\\left(${args}\\right)";
+    var defaultTemplate = '\\mathrm{${name}}\\left(${args}\\right)';
     var latexUnits = {
       deg: '^\\circ'
     };
@@ -41113,12 +41184,13 @@ var app = (function () {
 
           case 'number':
           case 'BigNumber':
-            var index = value.toLowerCase().indexOf('e');
+            {
+              var index = value.toLowerCase().indexOf('e');
 
-            if (index !== -1) {
-              return value.substring(0, index) + '\\cdot10^{' + value.substring(index + 1) + '}';
+              if (index !== -1) {
+                return value.substring(0, index) + '\\cdot10^{' + value.substring(index + 1) + '}';
+              }
             }
-
             return value;
 
           case 'Fraction':
@@ -41363,55 +41435,6 @@ var app = (function () {
       isNode: true
     });
 
-    var name$31 = 'index';
-    var dependencies$32 = ['Index'];
-    var createIndexTransform =
-    /* #__PURE__ */
-    factory(name$31, dependencies$32, function (_ref) {
-      var Index = _ref.Index;
-
-      /**
-       * Attach a transform function to math.index
-       * Adds a property transform containing the transform function.
-       *
-       * This transform creates a one-based index instead of a zero-based index
-       */
-      return function indexTransform() {
-        var args = [];
-
-        for (var i = 0, ii = arguments.length; i < ii; i++) {
-          var arg = arguments[i]; // change from one-based to zero based, and convert BigNumber to number
-
-          if (isRange(arg)) {
-            arg.start--;
-            arg.end -= arg.step > 0 ? 0 : 2;
-          } else if (arg && arg.isSet === true) {
-            arg = arg.map(function (v) {
-              return v - 1;
-            });
-          } else if (isArray(arg) || isMatrix(arg)) {
-            arg = arg.map(function (v) {
-              return v - 1;
-            });
-          } else if (isNumber(arg)) {
-            arg--;
-          } else if (isBigNumber(arg)) {
-            arg = arg.toNumber() - 1;
-          } else if (typeof arg === 'string') ; else {
-            throw new TypeError('Dimension must be an Array, Matrix, number, string, or Range');
-          }
-
-          args[i] = arg;
-        }
-
-        var res = new Index();
-        Index.apply(res, args);
-        return res;
-      };
-    }, {
-      isTransformFunction: true
-    });
-
     function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _nonIterableSpread(); }
 
     function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance"); }
@@ -41419,18 +41442,15 @@ var app = (function () {
     function _iterableToArray(iter) { if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter); }
 
     function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) { for (var i = 0, arr2 = new Array(arr.length); i < arr.length; i++) { arr2[i] = arr[i]; } return arr2; } }
-    var name$32 = 'IndexNode';
-    var dependencies$33 = ['Range', 'Node', 'Index', 'size'];
+    var name$31 = 'IndexNode';
+    var dependencies$32 = ['Range', 'Node', 'size'];
     var createIndexNode =
     /* #__PURE__ */
-    factory(name$32, dependencies$33, function (_ref) {
+    factory(name$31, dependencies$32, function (_ref) {
       var Range = _ref.Range,
           Node = _ref.Node,
-          Index = _ref.Index,
           size = _ref.size;
-      var index = createIndexTransform({
-        Index: Index
-      });
+
       /**
        * @constructor IndexNode
        * @extends Node
@@ -41446,7 +41466,6 @@ var app = (function () {
        *                                       notation like `a["b"]` (default).
        *                                       Used to stringify an IndexNode.
        */
-
       function IndexNode(dimensions, dotNotation) {
         if (!(this instanceof IndexNode)) {
           throw new SyntaxError('Constructor must be called with the new operator');
@@ -41502,7 +41521,7 @@ var app = (function () {
             if (range.needsEnd()) {
               // create a range containing end (like '4:end')
               var childArgNames = Object.create(argNames);
-              childArgNames['end'] = true;
+              childArgNames.end = true;
 
               var evalStart = range.start._compile(math, childArgNames);
 
@@ -41514,7 +41533,7 @@ var app = (function () {
               return function evalDimension(scope, args, context) {
                 var s = size(context).valueOf();
                 var childArgs = Object.create(args);
-                childArgs['end'] = s[i];
+                childArgs.end = s[i];
                 return createRange(evalStart(scope, childArgs, context), evalEnd(scope, childArgs, context), evalStep(scope, childArgs, context));
               };
             } else {
@@ -41535,14 +41554,14 @@ var app = (function () {
             // SymbolNode 'end'
             var _childArgNames = Object.create(argNames);
 
-            _childArgNames['end'] = true;
+            _childArgNames.end = true;
 
             var evalRange = range._compile(math, _childArgNames);
 
             return function evalDimension(scope, args, context) {
               var s = size(context).valueOf();
               var childArgs = Object.create(args);
-              childArgs['end'] = s[i];
+              childArgs.end = s[i];
               return evalRange(scope, childArgs, context);
             };
           } else {
@@ -41554,6 +41573,7 @@ var app = (function () {
             };
           }
         });
+        var index = getSafeProperty(math, 'index');
         return function evalIndexNode(scope, args, context) {
           var dimensions = map(evalDimensions, function (evalDimension) {
             return evalDimension(scope, args, context);
@@ -41587,7 +41607,7 @@ var app = (function () {
           dimensions[i] = this._ifNode(callback(this.dimensions[i], 'dimensions[' + i + ']', this));
         }
 
-        return new IndexNode(dimensions);
+        return new IndexNode(dimensions, this.dotNotation);
       };
       /**
        * Create a clone of this node, a shallow copy
@@ -41596,7 +41616,7 @@ var app = (function () {
 
 
       IndexNode.prototype.clone = function () {
-        return new IndexNode(this.dimensions.slice(0));
+        return new IndexNode(this.dimensions.slice(0), this.dotNotation);
       };
       /**
        * Test whether this IndexNode contains a single property name
@@ -41700,11 +41720,11 @@ var app = (function () {
     });
 
     function _typeof$a(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof$a = function _typeof(obj) { return typeof obj; }; } else { _typeof$a = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof$a(obj); }
-    var name$33 = 'ObjectNode';
-    var dependencies$34 = ['Node'];
+    var name$32 = 'ObjectNode';
+    var dependencies$33 = ['Node'];
     var createObjectNode =
     /* #__PURE__ */
-    factory(name$33, dependencies$34, function (_ref) {
+    factory(name$32, dependencies$33, function (_ref) {
       var Node = _ref.Node;
 
       /**
@@ -41912,11 +41932,11 @@ var app = (function () {
       isNode: true
     });
 
-    var name$34 = 'OperatorNode';
-    var dependencies$35 = ['Node'];
+    var name$33 = 'OperatorNode';
+    var dependencies$34 = ['Node'];
     var createOperatorNode =
     /* #__PURE__ */
-    factory(name$34, dependencies$35, function (_ref) {
+    factory(name$33, dependencies$34, function (_ref) {
       var Node = _ref.Node;
 
       /**
@@ -42106,137 +42126,141 @@ var app = (function () {
 
           case 1:
             // unary operators
-            // precedence of the operand
-            var operandPrecedence = getPrecedence(args[0], parenthesis); // handle special cases for LaTeX, where some of the parentheses aren't needed
+            {
+              // precedence of the operand
+              var operandPrecedence = getPrecedence(args[0], parenthesis); // handle special cases for LaTeX, where some of the parentheses aren't needed
 
-            if (latex && operandPrecedence !== null) {
-              var operandIdentifier;
-              var rootIdentifier;
+              if (latex && operandPrecedence !== null) {
+                var operandIdentifier;
+                var rootIdentifier;
 
-              if (parenthesis === 'keep') {
-                operandIdentifier = args[0].getIdentifier();
-                rootIdentifier = root.getIdentifier();
-              } else {
-                // Ignore Parenthesis Nodes when not in 'keep' mode
-                operandIdentifier = args[0].getContent().getIdentifier();
-                rootIdentifier = root.getContent().getIdentifier();
+                if (parenthesis === 'keep') {
+                  operandIdentifier = args[0].getIdentifier();
+                  rootIdentifier = root.getIdentifier();
+                } else {
+                  // Ignore Parenthesis Nodes when not in 'keep' mode
+                  operandIdentifier = args[0].getContent().getIdentifier();
+                  rootIdentifier = root.getContent().getIdentifier();
+                }
+
+                if (properties[precedence][rootIdentifier].latexLeftParens === false) {
+                  result = [false];
+                  break;
+                }
+
+                if (properties[operandPrecedence][operandIdentifier].latexParens === false) {
+                  result = [false];
+                  break;
+                }
               }
 
-              if (properties[precedence][rootIdentifier].latexLeftParens === false) {
+              if (operandPrecedence === null) {
+                // if the operand has no defined precedence, no parens are needed
                 result = [false];
                 break;
               }
 
-              if (properties[operandPrecedence][operandIdentifier].latexParens === false) {
-                result = [false];
+              if (operandPrecedence <= precedence) {
+                // if the operands precedence is lower, parens are needed
+                result = [true];
                 break;
-              }
-            }
+              } // otherwise, no parens needed
 
-            if (operandPrecedence === null) {
-              // if the operand has no defined precedence, no parens are needed
+
               result = [false];
-              break;
             }
-
-            if (operandPrecedence <= precedence) {
-              // if the operands precedence is lower, parens are needed
-              result = [true];
-              break;
-            } // otherwise, no parens needed
-
-
-            result = [false];
             break;
 
           case 2:
             // binary operators
-            var lhsParens; // left hand side needs parenthesis?
-            // precedence of the left hand side
+            {
+              var lhsParens; // left hand side needs parenthesis?
+              // precedence of the left hand side
 
-            var lhsPrecedence = getPrecedence(args[0], parenthesis); // is the root node associative with the left hand side
+              var lhsPrecedence = getPrecedence(args[0], parenthesis); // is the root node associative with the left hand side
 
-            var assocWithLhs = isAssociativeWith(root, args[0], parenthesis);
+              var assocWithLhs = isAssociativeWith(root, args[0], parenthesis);
 
-            if (lhsPrecedence === null) {
-              // if the left hand side has no defined precedence, no parens are needed
-              // FunctionNode for example
-              lhsParens = false;
-            } else if (lhsPrecedence === precedence && associativity === 'right' && !assocWithLhs) {
-              // In case of equal precedence, if the root node is left associative
-              // parens are **never** necessary for the left hand side.
-              // If it is right associative however, parens are necessary
-              // if the root node isn't associative with the left hand side
-              lhsParens = true;
-            } else if (lhsPrecedence < precedence) {
-              lhsParens = true;
-            } else {
-              lhsParens = false;
-            }
-
-            var rhsParens; // right hand side needs parenthesis?
-            // precedence of the right hand side
-
-            var rhsPrecedence = getPrecedence(args[1], parenthesis); // is the root node associative with the right hand side?
-
-            var assocWithRhs = isAssociativeWith(root, args[1], parenthesis);
-
-            if (rhsPrecedence === null) {
-              // if the right hand side has no defined precedence, no parens are needed
-              // FunctionNode for example
-              rhsParens = false;
-            } else if (rhsPrecedence === precedence && associativity === 'left' && !assocWithRhs) {
-              // In case of equal precedence, if the root node is right associative
-              // parens are **never** necessary for the right hand side.
-              // If it is left associative however, parens are necessary
-              // if the root node isn't associative with the right hand side
-              rhsParens = true;
-            } else if (rhsPrecedence < precedence) {
-              rhsParens = true;
-            } else {
-              rhsParens = false;
-            } // handle special cases for LaTeX, where some of the parentheses aren't needed
-
-
-            if (latex) {
-              var _rootIdentifier;
-
-              var lhsIdentifier;
-              var rhsIdentifier;
-
-              if (parenthesis === 'keep') {
-                _rootIdentifier = root.getIdentifier();
-                lhsIdentifier = root.args[0].getIdentifier();
-                rhsIdentifier = root.args[1].getIdentifier();
+              if (lhsPrecedence === null) {
+                // if the left hand side has no defined precedence, no parens are needed
+                // FunctionNode for example
+                lhsParens = false;
+              } else if (lhsPrecedence === precedence && associativity === 'right' && !assocWithLhs) {
+                // In case of equal precedence, if the root node is left associative
+                // parens are **never** necessary for the left hand side.
+                // If it is right associative however, parens are necessary
+                // if the root node isn't associative with the left hand side
+                lhsParens = true;
+              } else if (lhsPrecedence < precedence) {
+                lhsParens = true;
               } else {
-                // Ignore ParenthesisNodes when not in 'keep' mode
-                _rootIdentifier = root.getContent().getIdentifier();
-                lhsIdentifier = root.args[0].getContent().getIdentifier();
-                rhsIdentifier = root.args[1].getContent().getIdentifier();
+                lhsParens = false;
               }
 
-              if (lhsPrecedence !== null) {
-                if (properties[precedence][_rootIdentifier].latexLeftParens === false) {
-                  lhsParens = false;
+              var rhsParens; // right hand side needs parenthesis?
+              // precedence of the right hand side
+
+              var rhsPrecedence = getPrecedence(args[1], parenthesis); // is the root node associative with the right hand side?
+
+              var assocWithRhs = isAssociativeWith(root, args[1], parenthesis);
+
+              if (rhsPrecedence === null) {
+                // if the right hand side has no defined precedence, no parens are needed
+                // FunctionNode for example
+                rhsParens = false;
+              } else if (rhsPrecedence === precedence && associativity === 'left' && !assocWithRhs) {
+                // In case of equal precedence, if the root node is right associative
+                // parens are **never** necessary for the right hand side.
+                // If it is left associative however, parens are necessary
+                // if the root node isn't associative with the right hand side
+                rhsParens = true;
+              } else if (rhsPrecedence < precedence) {
+                rhsParens = true;
+              } else {
+                rhsParens = false;
+              } // handle special cases for LaTeX, where some of the parentheses aren't needed
+
+
+              if (latex) {
+                var _rootIdentifier;
+
+                var lhsIdentifier;
+                var rhsIdentifier;
+
+                if (parenthesis === 'keep') {
+                  _rootIdentifier = root.getIdentifier();
+                  lhsIdentifier = root.args[0].getIdentifier();
+                  rhsIdentifier = root.args[1].getIdentifier();
+                } else {
+                  // Ignore ParenthesisNodes when not in 'keep' mode
+                  _rootIdentifier = root.getContent().getIdentifier();
+                  lhsIdentifier = root.args[0].getContent().getIdentifier();
+                  rhsIdentifier = root.args[1].getContent().getIdentifier();
                 }
 
-                if (properties[lhsPrecedence][lhsIdentifier].latexParens === false) {
-                  lhsParens = false;
+                if (lhsPrecedence !== null) {
+                  if (properties[precedence][_rootIdentifier].latexLeftParens === false) {
+                    lhsParens = false;
+                  }
+
+                  if (properties[lhsPrecedence][lhsIdentifier].latexParens === false) {
+                    lhsParens = false;
+                  }
+                }
+
+                if (rhsPrecedence !== null) {
+                  if (properties[precedence][_rootIdentifier].latexRightParens === false) {
+                    rhsParens = false;
+                  }
+
+                  if (properties[rhsPrecedence][rhsIdentifier].latexParens === false) {
+                    rhsParens = false;
+                  }
                 }
               }
 
-              if (rhsPrecedence !== null) {
-                if (properties[precedence][_rootIdentifier].latexRightParens === false) {
-                  rhsParens = false;
-                }
-
-                if (properties[rhsPrecedence][rhsIdentifier].latexParens === false) {
-                  rhsParens = false;
-                }
-              }
+              result = [lhsParens, rhsParens];
             }
-
-            result = [lhsParens, rhsParens];
             break;
 
           default:
@@ -42587,11 +42611,11 @@ var app = (function () {
       isNode: true
     });
 
-    var name$35 = 'ParenthesisNode';
-    var dependencies$36 = ['Node'];
+    var name$34 = 'ParenthesisNode';
+    var dependencies$35 = ['Node'];
     var createParenthesisNode =
     /* #__PURE__ */
-    factory(name$35, dependencies$36, function (_ref) {
+    factory(name$34, dependencies$35, function (_ref) {
       var Node = _ref.Node;
 
       /**
@@ -42750,11 +42774,11 @@ var app = (function () {
       isNode: true
     });
 
-    var name$36 = 'RangeNode';
-    var dependencies$37 = ['Node'];
+    var name$35 = 'RangeNode';
+    var dependencies$36 = ['Node'];
     var createRangeNode =
     /* #__PURE__ */
-    factory(name$36, dependencies$37, function (_ref) {
+    factory(name$35, dependencies$36, function (_ref) {
       var Node = _ref.Node;
 
       /**
@@ -43036,11 +43060,11 @@ var app = (function () {
       isNode: true
     });
 
-    var name$37 = 'RelationalNode';
-    var dependencies$38 = ['Node'];
+    var name$36 = 'RelationalNode';
+    var dependencies$37 = ['Node'];
     var createRelationalNode =
     /* #__PURE__ */
-    factory(name$37, dependencies$38, function (_ref) {
+    factory(name$36, dependencies$37, function (_ref) {
       var Node = _ref.Node;
 
       /**
@@ -43254,11 +43278,11 @@ var app = (function () {
       isNode: true
     });
 
-    var name$38 = 'SymbolNode';
-    var dependencies$39 = ['math', '?Unit', 'Node'];
+    var name$37 = 'SymbolNode';
+    var dependencies$38 = ['math', '?Unit', 'Node'];
     var createSymbolNode =
     /* #__PURE__ */
-    factory(name$38, dependencies$39, function (_ref) {
+    factory(name$37, dependencies$38, function (_ref) {
       var math = _ref.math,
           Unit = _ref.Unit,
           Node = _ref.Node;
@@ -43461,11 +43485,11 @@ var app = (function () {
     function _typeof$b(obj) { if (typeof Symbol === "function" && typeof Symbol.iterator === "symbol") { _typeof$b = function _typeof(obj) { return typeof obj; }; } else { _typeof$b = function _typeof(obj) { return obj && typeof Symbol === "function" && obj.constructor === Symbol && obj !== Symbol.prototype ? "symbol" : typeof obj; }; } return _typeof$b(obj); }
 
     function _extends$3() { _extends$3 = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends$3.apply(this, arguments); }
-    var name$39 = 'FunctionNode';
-    var dependencies$3a = ['math', 'Node', 'SymbolNode'];
+    var name$38 = 'FunctionNode';
+    var dependencies$39 = ['math', 'Node', 'SymbolNode'];
     var createFunctionNode =
     /* #__PURE__ */
-    factory(name$39, dependencies$3a, function (_ref) {
+    factory(name$38, dependencies$39, function (_ref) {
       var math = _ref.math,
           Node = _ref.Node,
           SymbolNode = _ref.SymbolNode;
@@ -43924,11 +43948,11 @@ var app = (function () {
     });
 
     function _extends$4() { _extends$4 = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends$4.apply(this, arguments); }
-    var name$3a = 'parse';
-    var dependencies$3b = ['typed', 'numeric', 'config', 'AccessorNode', 'ArrayNode', 'AssignmentNode', 'BlockNode', 'ConditionalNode', 'ConstantNode', 'FunctionAssignmentNode', 'FunctionNode', 'IndexNode', 'ObjectNode', 'OperatorNode', 'ParenthesisNode', 'RangeNode', 'RelationalNode', 'SymbolNode'];
+    var name$39 = 'parse';
+    var dependencies$3a = ['typed', 'numeric', 'config', 'AccessorNode', 'ArrayNode', 'AssignmentNode', 'BlockNode', 'ConditionalNode', 'ConstantNode', 'FunctionAssignmentNode', 'FunctionNode', 'IndexNode', 'ObjectNode', 'OperatorNode', 'ParenthesisNode', 'RangeNode', 'RelationalNode', 'SymbolNode'];
     var createParse =
     /* #__PURE__ */
-    factory(name$3a, dependencies$3b, function (_ref) {
+    factory(name$39, dependencies$3a, function (_ref) {
       var typed = _ref.typed,
           numeric = _ref.numeric,
           config = _ref.config,
@@ -43987,7 +44011,7 @@ var app = (function () {
        * @return {Node | Node[]} node
        * @throws {Error}
        */
-      var parse = typed(name$3a, {
+      var parse = typed(name$39, {
         string: function string(expression) {
           return parseStart(expression, {});
         },
@@ -44017,9 +44041,9 @@ var app = (function () {
         DELIMITER: 1,
         NUMBER: 2,
         SYMBOL: 3,
-        UNKNOWN: 4 // map with all delimiters
+        UNKNOWN: 4
+      }; // map with all delimiters
 
-      };
       var DELIMITERS = {
         ',': true,
         '(': true,
@@ -44056,9 +44080,9 @@ var app = (function () {
         '>=': true,
         '<<': true,
         '>>': true,
-        '>>>': true // map with all named delimiters
+        '>>>': true
+      }; // map with all named delimiters
 
-      };
       var NAMED_DELIMITERS = {
         mod: true,
         to: true,
@@ -45614,7 +45638,7 @@ var app = (function () {
       function createSyntaxError(state, message) {
         var c = col(state);
         var error = new SyntaxError(message + ' (char ' + c + ')');
-        error['char'] = c;
+        error["char"] = c;
         return error;
       }
       /**
@@ -45629,18 +45653,18 @@ var app = (function () {
       function createError(state, message) {
         var c = col(state);
         var error = new SyntaxError(message + ' (char ' + c + ')');
-        error['char'] = c;
+        error["char"] = c;
         return error;
       }
 
       return parse;
     });
 
-    var name$3b = 'compile';
-    var dependencies$3c = ['typed', 'parse'];
+    var name$3a = 'compile';
+    var dependencies$3b = ['typed', 'parse'];
     var createCompile =
     /* #__PURE__ */
-    factory(name$3b, dependencies$3c, function (_ref) {
+    factory(name$3a, dependencies$3b, function (_ref) {
       var typed = _ref.typed,
           parse = _ref.parse;
 
@@ -45678,7 +45702,7 @@ var app = (function () {
        *            An object with the compiled expression
        * @throws {Error}
        */
-      return typed(name$3b, {
+      return typed(name$3a, {
         string: function string(expr) {
           return parse(expr).compile();
         },
@@ -45690,11 +45714,11 @@ var app = (function () {
       });
     });
 
-    var name$3c = 'evaluate';
-    var dependencies$3d = ['typed', 'parse'];
+    var name$3b = 'evaluate';
+    var dependencies$3c = ['typed', 'parse'];
     var createEvaluate =
     /* #__PURE__ */
-    factory(name$3c, dependencies$3d, function (_ref) {
+    factory(name$3b, dependencies$3c, function (_ref) {
       var typed = _ref.typed,
           parse = _ref.parse;
 
@@ -45730,7 +45754,7 @@ var app = (function () {
        * @return {*} The result of the expression
        * @throws {Error}
        */
-      return typed(name$3c, {
+      return typed(name$3b, {
         string: function string(expr) {
           var scope = {};
           return parse(expr).compile().evaluate(scope);
@@ -45752,11 +45776,11 @@ var app = (function () {
       });
     });
 
-    var name$3d = 'Parser';
-    var dependencies$3e = ['parse'];
+    var name$3c = 'Parser';
+    var dependencies$3d = ['parse'];
     var createParserClass =
     /* #__PURE__ */
-    factory(name$3d, dependencies$3e, function (_ref) {
+    factory(name$3c, dependencies$3d, function (_ref) {
       var parse = _ref.parse;
 
       /**
@@ -45930,11 +45954,11 @@ var app = (function () {
       isClass: true
     });
 
-    var name$3e = 'parser';
-    var dependencies$3f = ['typed', 'Parser'];
+    var name$3d = 'parser';
+    var dependencies$3e = ['typed', 'Parser'];
     var createParser =
     /* #__PURE__ */
-    factory(name$3e, dependencies$3f, function (_ref) {
+    factory(name$3d, dependencies$3e, function (_ref) {
       var typed = _ref.typed,
           Parser = _ref.Parser;
 
@@ -45981,18 +46005,18 @@ var app = (function () {
        *
        * @return {Parser} Parser
        */
-      return typed(name$3e, {
+      return typed(name$3d, {
         '': function _() {
           return new Parser();
         }
       });
     });
 
-    var name$3f = 'lup';
-    var dependencies$3g = ['typed', 'matrix', 'abs', 'addScalar', 'divideScalar', 'multiplyScalar', 'subtract', 'larger', 'equalScalar', 'unaryMinus', 'DenseMatrix', 'SparseMatrix', 'Spa'];
+    var name$3e = 'lup';
+    var dependencies$3f = ['typed', 'matrix', 'abs', 'addScalar', 'divideScalar', 'multiplyScalar', 'subtract', 'larger', 'equalScalar', 'unaryMinus', 'DenseMatrix', 'SparseMatrix', 'Spa'];
     var createLup =
     /* #__PURE__ */
-    factory(name$3f, dependencies$3g, function (_ref) {
+    factory(name$3e, dependencies$3f, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           abs = _ref.abs,
@@ -46033,7 +46057,7 @@ var app = (function () {
        *
        * @return {{L: Array | Matrix, U: Array | Matrix, P: Array.<number>}} The lower triangular matrix, the upper triangular matrix and the permutation matrix.
        */
-      return typed(name$3f, {
+      return typed(name$3e, {
         DenseMatrix: function DenseMatrix(m) {
           return _denseLUP(m);
         },
@@ -46400,17 +46424,18 @@ var app = (function () {
       }
     });
 
-    var name$3g = 'qr';
-    var dependencies$3h = ['typed', 'matrix', 'zeros', 'identity', 'isZero', 'unequal', 'sign', 'sqrt', 'conj', 'unaryMinus', 'addScalar', 'divideScalar', 'multiplyScalar', 'subtract'];
+    function _extends$5() { _extends$5 = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends$5.apply(this, arguments); }
+    var name$3f = 'qr';
+    var dependencies$3g = ['typed', 'matrix', 'zeros', 'identity', 'isZero', 'equal', 'sign', 'sqrt', 'conj', 'unaryMinus', 'addScalar', 'divideScalar', 'multiplyScalar', 'subtract', 'complex'];
     var createQr =
     /* #__PURE__ */
-    factory(name$3g, dependencies$3h, function (_ref) {
+    factory(name$3f, dependencies$3g, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           zeros = _ref.zeros,
           identity = _ref.identity,
           isZero = _ref.isZero,
-          unequal = _ref.unequal,
+          equal = _ref.equal,
           sign = _ref.sign,
           sqrt = _ref.sqrt,
           conj = _ref.conj,
@@ -46418,7 +46443,8 @@ var app = (function () {
           addScalar = _ref.addScalar,
           divideScalar = _ref.divideScalar,
           multiplyScalar = _ref.multiplyScalar,
-          subtract = _ref.subtract;
+          subtract = _ref.subtract,
+          complex = _ref.complex;
 
       /**
        * Calculate the Matrix QR decomposition. Matrix `A` is decomposed in
@@ -46463,7 +46489,7 @@ var app = (function () {
        * @return {{Q: Array | Matrix, R: Array | Matrix}} Q: the orthogonal
        * matrix and R: the upper triangular matrix
        */
-      return typed(name$3g, {
+      return _extends$5(typed(name$3f, {
         DenseMatrix: function DenseMatrix(m) {
           return _denseQR(m);
         },
@@ -46482,9 +46508,11 @@ var app = (function () {
             R: r.R.valueOf()
           };
         }
+      }), {
+        _denseQRimpl: _denseQRimpl
       });
 
-      function _denseQR(m) {
+      function _denseQRimpl(m) {
         // rows & columns (m x n)
         var rows = m._size[0]; // m
 
@@ -46523,7 +46551,7 @@ var app = (function () {
            *
            */
           var pivot = Rdata[k][k];
-          var sgn = unaryMinus(sign(pivot));
+          var sgn = unaryMinus(equal(pivot, 0) ? 1 : sign(pivot));
           var conjSgn = conj(sgn);
           var alphaSquared = 0;
 
@@ -46597,18 +46625,6 @@ var app = (function () {
               }
             }
           }
-        } // coerse almost zero elements to zero
-        // TODO I feel uneasy just zeroing these values
-
-
-        for (i = 0; i < rows; ++i) {
-          for (j = 0; j < i && j < cols; ++j) {
-            if (unequal(0, divideScalar(Rdata[i][j], 1e5))) {
-              throw new Error('math.qr(): unknown error - ' + 'R is not lower triangular (element (' + i + ', ' + j + ')  = ' + Rdata[i][j] + ')');
-            }
-
-            Rdata[i][j] = multiplyScalar(Rdata[i][j], 0);
-          }
         } // return matrices
 
 
@@ -46619,6 +46635,24 @@ var app = (function () {
             return 'Q: ' + this.Q.toString() + '\nR: ' + this.R.toString();
           }
         };
+      }
+
+      function _denseQR(m) {
+        var ret = _denseQRimpl(m);
+
+        var Rdata = ret.R._data;
+
+        if (m._data.length > 0) {
+          var zero = Rdata[0][0].type === 'Complex' ? complex(0) : 0;
+
+          for (var i = 0; i < Rdata.length; ++i) {
+            for (var j = 0; j < i && j < (Rdata[0] || []).length; ++j) {
+              Rdata[i][j] = zero;
+            }
+          }
+        }
+
+        return ret;
       }
 
       function _sparseQR(m) {
@@ -46939,11 +46973,11 @@ var app = (function () {
       return -i - 2;
     }
 
-    var name$3h = 'csAmd';
-    var dependencies$3i = ['add', 'multiply', 'transpose'];
+    var name$3g = 'csAmd';
+    var dependencies$3h = ['add', 'multiply', 'transpose'];
     var createCsAmd =
     /* #__PURE__ */
-    factory(name$3h, dependencies$3i, function (_ref) {
+    factory(name$3g, dependencies$3h, function (_ref) {
       var add = _ref.add,
           multiply = _ref.multiply,
           transpose = _ref.transpose;
@@ -47619,11 +47653,11 @@ var app = (function () {
       };
     }
 
-    var name$3i = 'csCounts';
-    var dependencies$3j = ['transpose'];
+    var name$3h = 'csCounts';
+    var dependencies$3i = ['transpose'];
     var createCsCounts =
     /* #__PURE__ */
-    factory(name$3i, dependencies$3j, function (_ref) {
+    factory(name$3h, dependencies$3i, function (_ref) {
       var transpose = _ref.transpose;
 
       /**
@@ -47758,11 +47792,11 @@ var app = (function () {
       };
     });
 
-    var name$3j = 'csSqr';
-    var dependencies$3k = ['add', 'multiply', 'transpose'];
+    var name$3i = 'csSqr';
+    var dependencies$3j = ['add', 'multiply', 'transpose'];
     var createCsSqr =
     /* #__PURE__ */
-    factory(name$3j, dependencies$3k, function (_ref) {
+    factory(name$3i, dependencies$3j, function (_ref) {
       var add = _ref.add,
           multiply = _ref.multiply,
           transpose = _ref.transpose;
@@ -48115,11 +48149,11 @@ var app = (function () {
       return top;
     }
 
-    var name$3k = 'csSpsolve';
-    var dependencies$3l = ['divideScalar', 'multiply', 'subtract'];
+    var name$3j = 'csSpsolve';
+    var dependencies$3k = ['divideScalar', 'multiply', 'subtract'];
     var createCsSpsolve =
     /* #__PURE__ */
-    factory(name$3k, dependencies$3l, function (_ref) {
+    factory(name$3j, dependencies$3k, function (_ref) {
       var divideScalar = _ref.divideScalar,
           multiply = _ref.multiply,
           subtract = _ref.subtract;
@@ -48202,11 +48236,11 @@ var app = (function () {
       };
     });
 
-    var name$3l = 'csLu';
-    var dependencies$3m = ['abs', 'divideScalar', 'multiply', 'subtract', 'larger', 'largerEq', 'SparseMatrix'];
+    var name$3k = 'csLu';
+    var dependencies$3l = ['abs', 'divideScalar', 'multiply', 'subtract', 'larger', 'largerEq', 'SparseMatrix'];
     var createCsLu =
     /* #__PURE__ */
-    factory(name$3l, dependencies$3m, function (_ref) {
+    factory(name$3k, dependencies$3l, function (_ref) {
       var abs = _ref.abs,
           divideScalar = _ref.divideScalar,
           multiply = _ref.multiply,
@@ -48399,11 +48433,11 @@ var app = (function () {
       };
     });
 
-    var name$3m = 'slu';
-    var dependencies$3n = ['typed', 'abs', 'add', 'multiply', 'transpose', 'divideScalar', 'subtract', 'larger', 'largerEq', 'SparseMatrix'];
+    var name$3l = 'slu';
+    var dependencies$3m = ['typed', 'abs', 'add', 'multiply', 'transpose', 'divideScalar', 'subtract', 'larger', 'largerEq', 'SparseMatrix'];
     var createSlu =
     /* #__PURE__ */
-    factory(name$3m, dependencies$3n, function (_ref) {
+    factory(name$3l, dependencies$3m, function (_ref) {
       var typed = _ref.typed,
           abs = _ref.abs,
           add = _ref.add,
@@ -48466,7 +48500,7 @@ var app = (function () {
        * @return {Object} The lower triangular matrix, the upper triangular matrix and the permutation vectors.
        */
 
-      return typed(name$3m, {
+      return typed(name$3l, {
         'SparseMatrix, number, number': function SparseMatrixNumberNumber(a, order, threshold) {
           // verify order
           if (!isInteger(order) || order < 0 || order > 3) {
@@ -48527,11 +48561,11 @@ var app = (function () {
       return x;
     }
 
-    var name$3n = 'lusolve';
-    var dependencies$3o = ['typed', 'matrix', 'lup', 'slu', 'usolve', 'lsolve', 'DenseMatrix'];
+    var name$3m = 'lusolve';
+    var dependencies$3n = ['typed', 'matrix', 'lup', 'slu', 'usolve', 'lsolve', 'DenseMatrix'];
     var createLusolve =
     /* #__PURE__ */
-    factory(name$3n, dependencies$3o, function (_ref) {
+    factory(name$3m, dependencies$3n, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           lup = _ref.lup,
@@ -48576,7 +48610,7 @@ var app = (function () {
        * @return {DenseMatrix | Array}           Column vector with the solution to the linear system A * x = b
        */
 
-      return typed(name$3n, {
+      return typed(name$3m, {
         'Array, Array | Matrix': function ArrayArrayMatrix(a, b) {
           // convert a to matrix
           a = matrix(a); // matrix lup decomposition
@@ -48652,11 +48686,11 @@ var app = (function () {
       }
     });
 
-    var name$3o = 'Help';
-    var dependencies$3p = ['parse'];
+    var name$3n = 'Help';
+    var dependencies$3o = ['parse'];
     var createHelpClass =
     /* #__PURE__ */
-    factory(name$3o, dependencies$3p, function (_ref) {
+    factory(name$3n, dependencies$3o, function (_ref) {
       var parse = _ref.parse;
 
       /**
@@ -48783,11 +48817,11 @@ var app = (function () {
       isClass: true
     });
 
-    var name$3p = 'Chain';
-    var dependencies$3q = ['?on', 'math'];
+    var name$3o = 'Chain';
+    var dependencies$3p = ['?on', 'math'];
     var createChainClass =
     /* #__PURE__ */
-    factory(name$3p, dependencies$3q, function (_ref) {
+    factory(name$3o, dependencies$3p, function (_ref) {
       var on = _ref.on,
           math = _ref.math;
 
@@ -48976,9 +49010,9 @@ var app = (function () {
         json: true,
         error: true,
         isChain: true // conflicts with the property isChain of a Chain instance
-        // create proxy for everything that is in math.js
 
-      };
+      }; // create proxy for everything that is in math.js
+
       Chain.createProxy(math); // register on the import event, automatically add a proxy for every imported function.
 
       if (on) {
@@ -49343,7 +49377,7 @@ var app = (function () {
       syntax: ['std(a, b, c, ...)', 'std(A)', 'std(A, normalization)'],
       description: 'Compute the standard deviation of all values, defined as std(A) = sqrt(variance(A)). Optional parameter normalization can be "unbiased" (default), "uncorrected", or "biased".',
       examples: ['std(2, 4, 6)', 'std([2, 4, 6, 8])', 'std([2, 4, 6, 8], "uncorrected")', 'std([2, 4, 6, 8], "biased")', 'std([1, 2, 3; 4, 5, 6])'],
-      seealso: ['max', 'mean', 'min', 'median', 'min', 'prod', 'sum', 'variance']
+      seealso: ['max', 'mean', 'min', 'median', 'prod', 'sum', 'variance']
     };
 
     var quantileSeqDocs = {
@@ -49649,7 +49683,7 @@ var app = (function () {
       syntax: ['permutations(n)', 'permutations(n, k)'],
       description: 'Compute the number of permutations of n items taken k at a time',
       examples: ['permutations(5)', 'permutations(5, 3)'],
-      seealso: ['combinations', 'factorial']
+      seealso: ['combinations', 'combinationsWithRep', 'factorial']
     };
 
     var multinomialDocs = {
@@ -49685,7 +49719,7 @@ var app = (function () {
       syntax: ['n!', 'factorial(n)'],
       description: 'Compute the factorial of a value',
       examples: ['5!', '5 * 4 * 3 * 2 * 1', '3!'],
-      seealso: ['combinations', 'permutations', 'gamma']
+      seealso: ['combinations', 'combinationsWithRep', 'permutations', 'gamma']
     };
 
     var combinationsDocs = {
@@ -49694,7 +49728,16 @@ var app = (function () {
       syntax: ['combinations(n, k)'],
       description: 'Compute the number of combinations of n items taken k at a time',
       examples: ['combinations(7, 5)'],
-      seealso: ['permutations', 'factorial']
+      seealso: ['combinationsWithRep', 'permutations', 'factorial']
+    };
+
+    var combinationsWithRepDocs = {
+      name: 'combinationsWithRep',
+      category: 'Probability',
+      syntax: ['combinationsWithRep(n, k)'],
+      description: 'Compute the number of combinations of n items taken k at a time with replacements.',
+      examples: ['combinationsWithRep(7, 5)'],
+      seealso: ['combinations', 'permutations', 'factorial']
     };
 
     var zerosDocs = {
@@ -51217,6 +51260,7 @@ var app = (function () {
       zeros: zerosDocs,
       // functions - probability
       combinations: combinationsDocs,
+      combinationsWithRep: combinationsWithRepDocs,
       // distribution: distributionDocs,
       factorial: factorialDocs,
       gamma: gammaDocs,
@@ -51311,11 +51355,11 @@ var app = (function () {
       numeric: numericDocs
     };
 
-    var name$3q = 'help';
-    var dependencies$3r = ['typed', 'mathWithTransform', 'Help'];
+    var name$3p = 'help';
+    var dependencies$3q = ['typed', 'mathWithTransform', 'Help'];
     var createHelp =
     /* #__PURE__ */
-    factory(name$3q, dependencies$3r, function (_ref) {
+    factory(name$3p, dependencies$3q, function (_ref) {
       var typed = _ref.typed,
           mathWithTransform = _ref.mathWithTransform,
           Help = _ref.Help;
@@ -51338,7 +51382,7 @@ var app = (function () {
        *                                              for which to get help
        * @return {Help} A help object
        */
-      return typed(name$3q, {
+      return typed(name$3p, {
         any: function any(search) {
           var prop;
           var searchName = search;
@@ -51379,11 +51423,11 @@ var app = (function () {
       });
     });
 
-    var name$3r = 'chain';
-    var dependencies$3s = ['typed', 'Chain'];
+    var name$3q = 'chain';
+    var dependencies$3r = ['typed', 'Chain'];
     var createChain =
     /* #__PURE__ */
-    factory(name$3r, dependencies$3s, function (_ref) {
+    factory(name$3q, dependencies$3r, function (_ref) {
       var typed = _ref.typed,
           Chain = _ref.Chain;
 
@@ -51422,7 +51466,7 @@ var app = (function () {
        * @param {*} [value]   A value of any type on which to start a chained operation.
        * @return {math.Chain} The created chain
        */
-      return typed(name$3r, {
+      return typed(name$3q, {
         '': function _() {
           return new Chain();
         },
@@ -51432,11 +51476,11 @@ var app = (function () {
       });
     });
 
-    var name$3s = 'det';
-    var dependencies$3t = ['typed', 'matrix', 'subtract', 'multiply', 'unaryMinus', 'lup'];
+    var name$3r = 'det';
+    var dependencies$3s = ['typed', 'matrix', 'subtract', 'multiply', 'unaryMinus', 'lup'];
     var createDet =
     /* #__PURE__ */
-    factory(name$3s, dependencies$3t, function (_ref) {
+    factory(name$3r, dependencies$3s, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           subtract = _ref.subtract,
@@ -51469,7 +51513,7 @@ var app = (function () {
        * @param {Array | Matrix} x  A matrix
        * @return {number} The determinant of `x`
        */
-      return typed(name$3s, {
+      return typed(name$3r, {
         any: function any(x) {
           return clone(x);
         },
@@ -51500,14 +51544,16 @@ var app = (function () {
               }
 
             case 2:
-              // two dimensional array
-              var rows = size[0];
-              var cols = size[1];
+              {
+                // two dimensional array
+                var rows = size[0];
+                var cols = size[1];
 
-              if (rows === cols) {
-                return _det(x.clone().valueOf(), rows);
-              } else {
-                throw new RangeError('Matrix must be square ' + '(size: ' + format$2(size) + ')');
+                if (rows === cols) {
+                  return _det(x.clone().valueOf(), rows);
+                } else {
+                  throw new RangeError('Matrix must be square ' + '(size: ' + format$2(size) + ')');
+                }
               }
 
             default:
@@ -51574,11 +51620,11 @@ var app = (function () {
       }
     });
 
-    var name$3t = 'inv';
-    var dependencies$3u = ['typed', 'matrix', 'divideScalar', 'addScalar', 'multiply', 'unaryMinus', 'det', 'identity', 'abs'];
+    var name$3s = 'inv';
+    var dependencies$3t = ['typed', 'matrix', 'divideScalar', 'addScalar', 'multiply', 'unaryMinus', 'det', 'identity', 'abs'];
     var createInv =
     /* #__PURE__ */
-    factory(name$3t, dependencies$3u, function (_ref) {
+    factory(name$3s, dependencies$3t, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           divideScalar = _ref.divideScalar,
@@ -51609,7 +51655,7 @@ var app = (function () {
        * @param {number | Complex | Array | Matrix} x     Matrix to be inversed
        * @return {number | Complex | Array | Matrix} The inverse of `x`.
        */
-      return typed(name$3t, {
+      return typed(name$3s, {
         'Array | Matrix': function ArrayMatrix(x) {
           var size = isMatrix(x) ? x.size() : arraySize(x);
 
@@ -51628,18 +51674,20 @@ var app = (function () {
 
             case 2:
               // two dimensional array
-              var rows = size[0];
-              var cols = size[1];
+              {
+                var rows = size[0];
+                var cols = size[1];
 
-              if (rows === cols) {
-                if (isMatrix(x)) {
-                  return matrix(_inv(x.valueOf(), rows, cols), x.storage());
+                if (rows === cols) {
+                  if (isMatrix(x)) {
+                    return matrix(_inv(x.valueOf(), rows, cols), x.storage());
+                  } else {
+                    // return an Array
+                    return _inv(x, rows, cols);
+                  }
                 } else {
-                  // return an Array
-                  return _inv(x, rows, cols);
+                  throw new RangeError('Matrix must be square ' + '(size: ' + format$2(size) + ')');
                 }
-              } else {
-                throw new RangeError('Matrix must be square ' + '(size: ' + format$2(size) + ')');
               }
 
             default:
@@ -51772,11 +51820,11 @@ var app = (function () {
       }
     });
 
-    var name$3u = 'expm';
-    var dependencies$3v = ['typed', 'abs', 'add', 'identity', 'inv', 'multiply'];
+    var name$3t = 'expm';
+    var dependencies$3u = ['typed', 'abs', 'add', 'identity', 'inv', 'multiply'];
     var createExpm =
     /* #__PURE__ */
-    factory(name$3u, dependencies$3v, function (_ref) {
+    factory(name$3t, dependencies$3u, function (_ref) {
       var typed = _ref.typed,
           abs = _ref.abs,
           add = _ref.add,
@@ -51809,7 +51857,7 @@ var app = (function () {
        * @param {Matrix} x  A square Matrix
        * @return {Matrix}   The exponential of x
        */
-      return typed(name$3u, {
+      return typed(name$3t, {
         Matrix: function Matrix(A) {
           // Check matrix size
           var size = A.size();
@@ -51936,11 +51984,11 @@ var app = (function () {
       }
     });
 
-    var name$3v = 'sqrtm';
-    var dependencies$3w = ['typed', 'abs', 'add', 'multiply', 'sqrt', 'subtract', 'inv', 'size', 'max', 'identity'];
+    var name$3u = 'sqrtm';
+    var dependencies$3v = ['typed', 'abs', 'add', 'multiply', 'sqrt', 'subtract', 'inv', 'size', 'max', 'identity'];
     var createSqrtm =
     /* #__PURE__ */
-    factory(name$3v, dependencies$3w, function (_ref) {
+    factory(name$3u, dependencies$3v, function (_ref) {
       var typed = _ref.typed,
           abs = _ref.abs,
           add = _ref.add,
@@ -51973,7 +52021,7 @@ var app = (function () {
        * @param  {Array | Matrix} A   The square matrix `A`
        * @return {Array | Matrix}     The principal square root of matrix `A`
        */
-      var sqrtm = typed(name$3v, {
+      var sqrtm = typed(name$3u, {
         'Array | Matrix': function ArrayMatrix(A) {
           var size = isMatrix(A) ? A.size() : arraySize(A);
 
@@ -51987,16 +52035,17 @@ var app = (function () {
               }
 
             case 2:
-              // Two-dimensional Array | Matrix
-              var rows = size[0];
-              var cols = size[1];
+              {
+                // Two-dimensional Array | Matrix
+                var rows = size[0];
+                var cols = size[1];
 
-              if (rows === cols) {
-                return _denmanBeavers(A);
-              } else {
-                throw new RangeError('Matrix must be square ' + '(size: ' + format$2(size) + ')');
+                if (rows === cols) {
+                  return _denmanBeavers(A);
+                } else {
+                  throw new RangeError('Matrix must be square ' + '(size: ' + format$2(size) + ')');
+                }
               }
-
           }
         }
       });
@@ -52035,11 +52084,11 @@ var app = (function () {
       return sqrtm;
     });
 
-    var name$3w = 'divide';
-    var dependencies$3x = ['typed', 'matrix', 'multiply', 'equalScalar', 'divideScalar', 'inv'];
+    var name$3v = 'divide';
+    var dependencies$3w = ['typed', 'matrix', 'multiply', 'equalScalar', 'divideScalar', 'inv'];
     var createDivide =
     /* #__PURE__ */
-    factory(name$3w, dependencies$3x, function (_ref) {
+    factory(name$3v, dependencies$3w, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           multiply = _ref.multiply,
@@ -52110,11 +52159,11 @@ var app = (function () {
       }, divideScalar.signatures));
     });
 
-    var name$3x = 'distance';
-    var dependencies$3y = ['typed', 'addScalar', 'subtract', 'divideScalar', 'multiplyScalar', 'unaryMinus', 'sqrt', 'abs'];
+    var name$3w = 'distance';
+    var dependencies$3x = ['typed', 'addScalar', 'subtract', 'divideScalar', 'multiplyScalar', 'unaryMinus', 'sqrt', 'abs'];
     var createDistance =
     /* #__PURE__ */
-    factory(name$3x, dependencies$3y, function (_ref) {
+    factory(name$3w, dependencies$3x, function (_ref) {
       var typed = _ref.typed,
           addScalar = _ref.addScalar,
           subtract = _ref.subtract,
@@ -52175,7 +52224,7 @@ var app = (function () {
         * @param {Array | Matrix | Object} y    Co-ordinates of second point
         * @return {Number | BigNumber} Returns the distance from two/three points
       */
-      return typed(name$3x, {
+      return typed(name$3w, {
         'Array, Array, Array': function ArrayArrayArray(x, y, z) {
           // Point to Line 2D (x=Point, y=LinePoint1, z=LinePoint2)
           if (x.length === 2 && y.length === 2 && z.length === 2) {
@@ -52457,11 +52506,11 @@ var app = (function () {
       }
     });
 
-    var name$3y = 'intersect';
-    var dependencies$3z = ['typed', 'config', 'abs', 'add', 'addScalar', 'matrix', 'multiply', 'multiplyScalar', 'divideScalar', 'subtract', 'smaller', 'equalScalar'];
+    var name$3x = 'intersect';
+    var dependencies$3y = ['typed', 'config', 'abs', 'add', 'addScalar', 'matrix', 'multiply', 'multiplyScalar', 'divideScalar', 'subtract', 'smaller', 'equalScalar'];
     var createIntersect =
     /* #__PURE__ */
-    factory(name$3y, dependencies$3z, function (_ref) {
+    factory(name$3x, dependencies$3y, function (_ref) {
       var typed = _ref.typed,
           config = _ref.config,
           abs = _ref.abs,
@@ -52658,11 +52707,11 @@ var app = (function () {
       return intersect;
     });
 
-    var name$3z = 'sum';
-    var dependencies$3A = ['typed', 'config', 'add', '?bignumber', '?fraction'];
+    var name$3y = 'sum';
+    var dependencies$3z = ['typed', 'config', 'add', '?bignumber', '?fraction'];
     var createSum =
     /* #__PURE__ */
-    factory(name$3z, dependencies$3A, function (_ref) {
+    factory(name$3y, dependencies$3z, function (_ref) {
       var typed = _ref.typed,
           config = _ref.config,
           add = _ref.add,
@@ -52692,7 +52741,7 @@ var app = (function () {
        * @param {... *} args  A single matrix or or multiple scalar values
        * @return {*} The sum of all values
        */
-      return typed(name$3z, {
+      return typed(name$3y, {
         // sum([a, b, c, d, ...])
         'Array | Matrix': _sum,
         // sum([a, b, c, d, ...], dim)
@@ -52752,11 +52801,11 @@ var app = (function () {
       }
     });
 
-    var name$3A = 'mean';
-    var dependencies$3B = ['typed', 'add', 'divide'];
+    var name$3z = 'mean';
+    var dependencies$3A = ['typed', 'add', 'divide'];
     var createMean =
     /* #__PURE__ */
-    factory(name$3A, dependencies$3B, function (_ref) {
+    factory(name$3z, dependencies$3A, function (_ref) {
       var typed = _ref.typed,
           add = _ref.add,
           divide = _ref.divide;
@@ -52788,7 +52837,7 @@ var app = (function () {
        * @param {... *} args  A single matrix or or multiple scalar values
        * @return {*} The mean of all values
        */
-      return typed(name$3A, {
+      return typed(name$3z, {
         // mean([a, b, c, d, ...])
         'Array | Matrix': _mean,
         // mean([a, b, c, d, ...], dim)
@@ -52829,11 +52878,11 @@ var app = (function () {
 
 
       function _mean(array) {
-        var sum = 0;
+        var sum;
         var num = 0;
         deepForEach(array, function (value) {
           try {
-            sum = add(sum, value);
+            sum = sum === undefined ? value : add(sum, value);
             num++;
           } catch (err) {
             throw improveErrorMessage(err, 'mean', value);
@@ -52841,18 +52890,18 @@ var app = (function () {
         });
 
         if (num === 0) {
-          throw new Error('Cannot calculate mean of an empty array');
+          throw new Error('Cannot calculate the mean of an empty array');
         }
 
         return divide(sum, num);
       }
     });
 
-    var name$3B = 'median';
-    var dependencies$3C = ['typed', 'add', 'divide', 'compare', 'partitionSelect'];
+    var name$3A = 'median';
+    var dependencies$3B = ['typed', 'add', 'divide', 'compare', 'partitionSelect'];
     var createMedian =
     /* #__PURE__ */
-    factory(name$3B, dependencies$3C, function (_ref) {
+    factory(name$3A, dependencies$3B, function (_ref) {
       var typed = _ref.typed,
           add = _ref.add,
           divide = _ref.divide,
@@ -52885,7 +52934,7 @@ var app = (function () {
        * @param {... *} args  A single matrix or or multiple scalar values
        * @return {*} The median
        */
-      var median = typed(name$3B, {
+      var median = typed(name$3A, {
         // median([a, b, c, d, ...])
         'Array | Matrix': _median,
         // median([a, b, c, d, ...], dim)
@@ -52957,11 +53006,11 @@ var app = (function () {
       return median;
     });
 
-    var name$3C = 'mad';
-    var dependencies$3D = ['typed', 'abs', 'map', 'median', 'subtract'];
+    var name$3B = 'mad';
+    var dependencies$3C = ['typed', 'abs', 'map', 'median', 'subtract'];
     var createMad =
     /* #__PURE__ */
-    factory(name$3C, dependencies$3D, function (_ref) {
+    factory(name$3B, dependencies$3C, function (_ref) {
       var typed = _ref.typed,
           abs = _ref.abs,
           map = _ref.map,
@@ -52992,7 +53041,7 @@ var app = (function () {
        *                        A single matrix or multiple scalar values.
        * @return {*} The median absolute deviation.
        */
-      return typed(name$3C, {
+      return typed(name$3B, {
         // mad([a, b, c, d, ...])
         'Array | Matrix': _mad,
         // mad(a, b, c, d, ...)
@@ -53024,11 +53073,11 @@ var app = (function () {
     });
 
     var DEFAULT_NORMALIZATION = 'unbiased';
-    var name$3D = 'variance';
-    var dependencies$3E = ['typed', 'add', 'subtract', 'multiply', 'divide', 'apply', 'isNaN'];
+    var name$3C = 'variance';
+    var dependencies$3D = ['typed', 'add', 'subtract', 'multiply', 'divide', 'apply', 'isNaN'];
     var createVariance =
     /* #__PURE__ */
-    factory(name$3D, dependencies$3E, function (_ref) {
+    factory(name$3C, dependencies$3D, function (_ref) {
       var typed = _ref.typed,
           add = _ref.add,
           subtract = _ref.subtract,
@@ -53090,7 +53139,7 @@ var app = (function () {
        *                        Determines the axis to compute the variance for a matrix
        * @return {*} The variance
        */
-      return typed(name$3D, {
+      return typed(name$3C, {
         // variance([a, b, c, d, ...])
         'Array | Matrix': function ArrayMatrix(array) {
           return _var(array, DEFAULT_NORMALIZATION);
@@ -53158,8 +53207,10 @@ var app = (function () {
             return divide(sum, num + 1);
 
           case 'unbiased':
-            var zero = isBigNumber(sum) ? sum.mul(0) : 0;
-            return num === 1 ? zero : divide(sum, num - 1);
+            {
+              var zero = isBigNumber(sum) ? sum.mul(0) : 0;
+              return num === 1 ? zero : divide(sum, num - 1);
+            }
 
           default:
             throw new Error('Unknown normalization "' + normalization + '". ' + 'Choose "unbiased" (default), "uncorrected", or "biased".');
@@ -53181,11 +53232,11 @@ var app = (function () {
       }
     }); // For backward compatibility, deprecated since version 6.0.0. Date: 2018-11-09
 
-    var name$3E = 'quantileSeq';
-    var dependencies$3F = ['typed', 'add', 'multiply', 'partitionSelect', 'compare'];
+    var name$3D = 'quantileSeq';
+    var dependencies$3E = ['typed', 'add', 'multiply', 'partitionSelect', 'compare'];
     var createQuantileSeq =
     /* #__PURE__ */
-    factory(name$3E, dependencies$3F, function (_ref) {
+    factory(name$3D, dependencies$3E, function (_ref) {
       var typed = _ref.typed,
           add = _ref.add,
           multiply = _ref.multiply,
@@ -53453,11 +53504,11 @@ var app = (function () {
       return quantileSeq;
     });
 
-    var name$3F = 'std';
-    var dependencies$3G = ['typed', 'sqrt', 'variance'];
+    var name$3E = 'std';
+    var dependencies$3F = ['typed', 'sqrt', 'variance'];
     var createStd =
     /* #__PURE__ */
-    factory(name$3F, dependencies$3G, function (_ref) {
+    factory(name$3E, dependencies$3F, function (_ref) {
       var typed = _ref.typed,
           sqrt = _ref.sqrt,
           variance = _ref.variance;
@@ -53514,7 +53565,7 @@ var app = (function () {
        *                        Determines the axis to compute the standard deviation for a matrix
        * @return {*} The standard deviation
        */
-      return typed(name$3F, {
+      return typed(name$3E, {
         // std([a, b, c, d, ...])
         'Array | Matrix': _std,
         // std([a, b, c, d, ...], normalization)
@@ -53546,11 +53597,11 @@ var app = (function () {
       }
     });
 
-    var name$3G = 'combinations';
-    var dependencies$3H = ['typed'];
+    var name$3F = 'combinations';
+    var dependencies$3G = ['typed'];
     var createCombinations =
     /* #__PURE__ */
-    factory(name$3G, dependencies$3H, function (_ref) {
+    factory(name$3F, dependencies$3G, function (_ref) {
       var typed = _ref.typed;
 
       /**
@@ -53570,17 +53621,18 @@ var app = (function () {
        *
        * See also:
        *
-       *    permutations, factorial
+       *    combinationsWithRep, permutations, factorial
        *
        * @param {number | BigNumber} n    Total number of objects in the set
        * @param {number | BigNumber} k    Number of objects in the subset
        * @return {number | BigNumber}     Number of possible combinations.
        */
-      return typed(name$3G, {
+      return typed(name$3F, {
         'number, number': combinationsNumber,
         'BigNumber, BigNumber': function BigNumberBigNumber(n, k) {
           var BigNumber = n.constructor;
-          var max, result, i, ii;
+          var result, i;
+          var nMinusk = n.minus(k);
           var one = new BigNumber(1);
 
           if (!isPositiveInteger(n) || !isPositiveInteger(k)) {
@@ -53591,12 +53643,16 @@ var app = (function () {
             throw new TypeError('k must be less than n in function combinations');
           }
 
-          max = n.minus(k);
-          if (k.lt(max)) max = k;
           result = one;
 
-          for (i = one, ii = n.minus(max); i.lte(ii); i = i.plus(1)) {
-            result = result.times(max.plus(i)).dividedBy(i);
+          if (k.lt(nMinusk)) {
+            for (i = one; i.lte(nMinusk); i = i.plus(one)) {
+              result = result.times(k.plus(i)).dividedBy(i);
+            }
+          } else {
+            for (i = one; i.lte(k); i = i.plus(one)) {
+              result = result.times(nMinusk.plus(i)).dividedBy(i);
+            }
           }
 
           return result;
@@ -53611,6 +53667,99 @@ var app = (function () {
      */
 
     function isPositiveInteger(n) {
+      return n.isInteger() && n.gte(0);
+    }
+
+    var name$3G = 'combinationsWithRep';
+    var dependencies$3H = ['typed'];
+    var createCombinationsWithRep =
+    /* #__PURE__ */
+    factory(name$3G, dependencies$3H, function (_ref) {
+      var typed = _ref.typed;
+
+      /**
+       * Compute the number of ways of picking `k` unordered outcomes from `n`
+       * possibilities, allowing individual outcomes to be repeated more than once.
+       *
+       * CombinationsWithRep only takes integer arguments.
+       * The following condition must be enforced: k <= n + k -1.
+       *
+       * Syntax:
+       *
+       *     math.combinationsWithRep(n, k)
+       *
+       * Examples:
+       *
+       *    math.combinationsWithRep(7, 5) // returns 462
+       *
+       * See also:
+       *
+       *    combinations, permutations, factorial
+       *
+       * @param {number | BigNumber} n    Total number of objects in the set
+       * @param {number | BigNumber} k    Number of objects in the subset
+       * @return {number | BigNumber}     Number of possible combinations with replacement.
+       */
+      return typed(name$3G, {
+        'number, number': function numberNumber(n, k) {
+          if (!isInteger(n) || n < 0) {
+            throw new TypeError('Positive integer value expected in function combinationsWithRep');
+          }
+
+          if (!isInteger(k) || k < 0) {
+            throw new TypeError('Positive integer value expected in function combinationsWithRep');
+          }
+
+          if (n < 1) {
+            throw new TypeError('k must be less than or equal to n + k - 1');
+          }
+
+          if (k < n - 1) {
+            var _prodrange = product(n, n + k - 1);
+
+            return _prodrange / product(1, k);
+          }
+
+          var prodrange = product(k + 1, n + k - 1);
+          return prodrange / product(1, n - 1);
+        },
+        'BigNumber, BigNumber': function BigNumberBigNumber(n, k) {
+          var BigNumber = n.constructor;
+          var result, i;
+          var one = new BigNumber(1);
+          var nMinusOne = n.minus(one);
+
+          if (!isPositiveInteger$1(n) || !isPositiveInteger$1(k)) {
+            throw new TypeError('Positive integer value expected in function combinationsWithRep');
+          }
+
+          if (n.lt(one)) {
+            throw new TypeError('k must be less than or equal to n + k - 1 in function combinationsWithRep');
+          }
+
+          result = one;
+
+          if (k.lt(nMinusOne)) {
+            for (i = one; i.lte(nMinusOne); i = i.plus(one)) {
+              result = result.times(k.plus(i)).dividedBy(i);
+            }
+          } else {
+            for (i = one; i.lte(k); i = i.plus(one)) {
+              result = result.times(nMinusOne.plus(i)).dividedBy(i);
+            }
+          }
+
+          return result;
+        }
+      });
+    });
+    /**
+     * Test whether BigNumber n is a positive integer
+     * @param {BigNumber} n
+     * @returns {boolean} isPositiveInteger
+     */
+
+    function isPositiveInteger$1(n) {
       return n.isInteger() && n.gte(0);
     }
 
@@ -53764,7 +53913,7 @@ var app = (function () {
        *
        * See also:
        *
-       *    combinations, gamma, permutations
+       *    combinations, combinationsWithRep, gamma, permutations
        *
        * @param {number | BigNumber | Array | Matrix} n   An integer number
        * @return {number | BigNumber | Array | Matrix}    The factorial of `n`
@@ -53955,7 +54104,7 @@ var app = (function () {
        *
        * See also:
        *
-       *    combinations, factorial
+       *    combinations, combinationsWithRep, factorial
        *
        * @param {number | BigNumber} n   The number of objects in total
        * @param {number | BigNumber} [k] The number of objects in the subset
@@ -53982,7 +54131,7 @@ var app = (function () {
         'BigNumber, BigNumber': function BigNumberBigNumber(n, k) {
           var result, i;
 
-          if (!isPositiveInteger$1(n) || !isPositiveInteger$1(k)) {
+          if (!isPositiveInteger$2(n) || !isPositiveInteger$2(k)) {
             throw new TypeError('Positive integer value expected in function permutations');
           }
 
@@ -54008,7 +54157,7 @@ var app = (function () {
      * @returns {boolean} isPositiveInteger
      */
 
-    function isPositiveInteger$1(n) {
+    function isPositiveInteger$2(n) {
       return n.isInteger() && n.gte(0);
     }
 
@@ -55301,87 +55450,91 @@ var app = (function () {
           case 'FunctionNode':
             if (mathWithTransform[node.name] && mathWithTransform[node.name].rawArgs) {
               return node;
-            } // Process operators as OperatorNode
-
-
-            var operatorFunctions = ['add', 'multiply'];
-
-            if (operatorFunctions.indexOf(node.name) === -1) {
-              var _args = node.args.map(function (arg) {
-                return foldFraction(arg, options);
-              }); // If all args are numbers
-
-
-              if (!_args.some(isNode)) {
-                try {
-                  return _eval(node.name, _args, options);
-                } catch (ignoreandcontine) {}
-              } // Convert all args to nodes and construct a symbolic function call
-
-
-              _args = _args.map(function (arg) {
-                return isNode(arg) ? arg : _toNode(arg);
-              });
-              return new FunctionNode(node.name, _args);
-            } // treat as operator
-
-            /* falls through */
-
-
-          case 'OperatorNode':
-            var fn = node.fn.toString();
-            var args;
-            var res;
-            var makeNode = createMakeNodeFunction(node);
-
-            if (isOperatorNode(node) && node.isUnary()) {
-              args = [foldFraction(node.args[0], options)];
-
-              if (!isNode(args[0])) {
-                res = _eval(fn, args, options);
-              } else {
-                res = makeNode(args);
-              }
-            } else if (isAssociative(node)) {
-              args = allChildren(node);
-              args = args.map(function (arg) {
-                return foldFraction(arg, options);
-              });
-
-              if (isCommutative(fn)) {
-                // commutative binary operator
-                var consts = [];
-                var vars = [];
-
-                for (var i = 0; i < args.length; i++) {
-                  if (!isNode(args[i])) {
-                    consts.push(args[i]);
-                  } else {
-                    vars.push(args[i]);
-                  }
-                }
-
-                if (consts.length > 1) {
-                  res = foldOp(fn, consts, makeNode, options);
-                  vars.unshift(res);
-                  res = foldOp(fn, vars, makeNode, options);
-                } else {
-                  // we won't change the children order since it's not neccessary
-                  res = foldOp(fn, args, makeNode, options);
-                }
-              } else {
-                // non-commutative binary operator
-                res = foldOp(fn, args, makeNode, options);
-              }
-            } else {
-              // non-associative binary operator
-              args = node.args.map(function (arg) {
-                return foldFraction(arg, options);
-              });
-              res = foldOp(fn, args, makeNode, options);
             }
 
-            return res;
+            {
+              // Process operators as OperatorNode
+              var operatorFunctions = ['add', 'multiply'];
+
+              if (operatorFunctions.indexOf(node.name) === -1) {
+                var args = node.args.map(function (arg) {
+                  return foldFraction(arg, options);
+                }); // If all args are numbers
+
+                if (!args.some(isNode)) {
+                  try {
+                    return _eval(node.name, args, options);
+                  } catch (ignoreandcontine) {}
+                } // Convert all args to nodes and construct a symbolic function call
+
+
+                args = args.map(function (arg) {
+                  return isNode(arg) ? arg : _toNode(arg);
+                });
+                return new FunctionNode(node.name, args);
+              }
+            }
+
+          /* falls through */
+
+          case 'OperatorNode':
+            {
+              var fn = node.fn.toString();
+
+              var _args;
+
+              var res;
+              var makeNode = createMakeNodeFunction(node);
+
+              if (isOperatorNode(node) && node.isUnary()) {
+                _args = [foldFraction(node.args[0], options)];
+
+                if (!isNode(_args[0])) {
+                  res = _eval(fn, _args, options);
+                } else {
+                  res = makeNode(_args);
+                }
+              } else if (isAssociative(node)) {
+                _args = allChildren(node);
+                _args = _args.map(function (arg) {
+                  return foldFraction(arg, options);
+                });
+
+                if (isCommutative(fn)) {
+                  // commutative binary operator
+                  var consts = [];
+                  var vars = [];
+
+                  for (var i = 0; i < _args.length; i++) {
+                    if (!isNode(_args[i])) {
+                      consts.push(_args[i]);
+                    } else {
+                      vars.push(_args[i]);
+                    }
+                  }
+
+                  if (consts.length > 1) {
+                    res = foldOp(fn, consts, makeNode, options);
+                    vars.unshift(res);
+                    res = foldOp(fn, vars, makeNode, options);
+                  } else {
+                    // we won't change the children order since it's not neccessary
+                    res = foldOp(fn, _args, makeNode, options);
+                  }
+                } else {
+                  // non-commutative binary operator
+                  res = foldOp(fn, _args, makeNode, options);
+                }
+              } else {
+                // non-associative binary operator
+                _args = node.args.map(function (arg) {
+                  return foldFraction(arg, options);
+                });
+                res = foldOp(fn, _args, makeNode, options);
+              }
+
+              return res;
+            }
 
           case 'ParenthesisNode':
             // remove the uneccessary parenthesis
@@ -55713,17 +55866,17 @@ var app = (function () {
         tau: true // null: false,
         // undefined: false,
         // version: false,
-        // Array of strings, used to build the ruleSet.
-        // Each l (left side) and r (right side) are parsed by
-        // the expression parser into a node tree.
-        // Left hand sides are matched to subtrees within the
-        // expression to be parsed and replaced with the right
-        // hand side.
-        // TODO: Add support for constraints on constants (either in the form of a '=' expression or a callback [callback allows things like comparing symbols alphabetically])
-        // To evaluate lhs constants for rhs constants, use: { l: 'c1+c2', r: 'c3', evaluate: 'c3 = c1 + c2' }. Multiple assignments are separated by ';' in block format.
-        // It is possible to get into an infinite loop with conflicting rules
 
-      };
+      }; // Array of strings, used to build the ruleSet.
+      // Each l (left side) and r (right side) are parsed by
+      // the expression parser into a node tree.
+      // Left hand sides are matched to subtrees within the
+      // expression to be parsed and replaced with the right
+      // hand side.
+      // TODO: Add support for constraints on constants (either in the form of a '=' expression or a callback [callback allows things like comparing symbols alphabetically])
+      // To evaluate lhs constants for rhs constants, use: { l: 'c1+c2', r: 'c3', evaluate: 'c3 = c1 + c2' }. Multiple assignments are separated by ';' in block format.
+      // It is possible to get into an infinite loop with conflicting rules
+
       simplify.rules = [simplifyCore, // { l: 'n+0', r: 'n' },     // simplifyCore
       // { l: 'n^0', r: '1' },     // simplifyCore
       // { l: '0*n', r: '0' },     // simplifyCore
@@ -55833,9 +55986,9 @@ var app = (function () {
       // { l: '(n*n1)/(n*n2)', r: 'n1/n2' },
       {
         l: '1*n',
-        r: 'n' // this pattern can be produced by simplifyConstant
-
-      }];
+        r: 'n'
+      } // this pattern can be produced by simplifyConstant
+      ];
       /**
        * Parse the string array of rules into nodes
        *
@@ -55865,15 +56018,17 @@ var app = (function () {
 
           switch (ruleType) {
             case 'string':
-              var lr = rule.split('->');
+              {
+                var lr = rule.split('->');
 
-              if (lr.length === 2) {
-                rule = {
-                  l: lr[0],
-                  r: lr[1]
-                };
-              } else {
-                throw SyntaxError('Could not parse rule: ' + rule);
+                if (lr.length === 2) {
+                  rule = {
+                    l: lr[0],
+                    r: lr[1]
+                  };
+                } else {
+                  throw SyntaxError('Could not parse rule: ' + rule);
+                }
               }
 
             /* falls through */
@@ -56030,9 +56185,8 @@ var app = (function () {
 
       function mergeMatch(match1, match2) {
         var res = {
-          placeholders: {} // Some matches may not have placeholders; this is OK
-
-        };
+          placeholders: {}
+        }; // Some matches may not have placeholders; this is OK
 
         if (!match1.placeholders && !match2.placeholders) {
           return res;
@@ -57451,9 +57605,9 @@ var app = (function () {
         }, // inversion constant with variable
         {
           l: '(n1^n2)^n3',
-          r: '(n1^(n2*n3))' // Power to Power
-
-        }];
+          r: '(n1^(n2*n3))'
+        } // Power to Power
+        ];
         return setRules;
       } // End rulesRationalize
       // ---------------------------------------------------------------------------------------
@@ -57798,7 +57952,7 @@ var app = (function () {
       };
     });
 
-    var version = '6.0.4'; // Note: This file is automatically generated when building math.js.
+    var version = '6.2.5'; // Note: This file is automatically generated when building math.js.
     // Changes made in this file will be overwritten.
 
     var createTrue =
@@ -58364,11 +58518,60 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$43 = 'map';
-    var dependencies$44 = ['typed'];
-    var createMapTransform =
+    var name$43 = 'index';
+    var dependencies$44 = ['Index'];
+    var createIndexTransform =
     /* #__PURE__ */
     factory(name$43, dependencies$44, function (_ref) {
+      var Index = _ref.Index;
+
+      /**
+       * Attach a transform function to math.index
+       * Adds a property transform containing the transform function.
+       *
+       * This transform creates a one-based index instead of a zero-based index
+       */
+      return function indexTransform() {
+        var args = [];
+
+        for (var i = 0, ii = arguments.length; i < ii; i++) {
+          var arg = arguments[i]; // change from one-based to zero based, and convert BigNumber to number
+
+          if (isRange(arg)) {
+            arg.start--;
+            arg.end -= arg.step > 0 ? 0 : 2;
+          } else if (arg && arg.isSet === true) {
+            arg = arg.map(function (v) {
+              return v - 1;
+            });
+          } else if (isArray(arg) || isMatrix(arg)) {
+            arg = arg.map(function (v) {
+              return v - 1;
+            });
+          } else if (isNumber(arg)) {
+            arg--;
+          } else if (isBigNumber(arg)) {
+            arg = arg.toNumber() - 1;
+          } else if (typeof arg === 'string') ; else {
+            throw new TypeError('Dimension must be an Array, Matrix, number, string, or Range');
+          }
+
+          args[i] = arg;
+        }
+
+        var res = new Index();
+        Index.apply(res, args);
+        return res;
+      };
+    }, {
+      isTransformFunction: true
+    });
+
+    var name$44 = 'map';
+    var dependencies$45 = ['typed'];
+    var createMapTransform =
+    /* #__PURE__ */
+    factory(name$44, dependencies$45, function (_ref) {
       var typed = _ref.typed;
 
       /**
@@ -58446,11 +58649,11 @@ var app = (function () {
       return recurse(array, []);
     }
 
-    var name$44 = 'max';
-    var dependencies$45 = ['typed', 'larger'];
+    var name$45 = 'max';
+    var dependencies$46 = ['typed', 'larger'];
     var createMaxTransform =
     /* #__PURE__ */
-    factory(name$44, dependencies$45, function (_ref) {
+    factory(name$45, dependencies$46, function (_ref) {
       var typed = _ref.typed,
           larger = _ref.larger;
       var max = createMax({
@@ -58489,11 +58692,11 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$45 = 'mean';
-    var dependencies$46 = ['typed', 'add', 'divide'];
+    var name$46 = 'mean';
+    var dependencies$47 = ['typed', 'add', 'divide'];
     var createMeanTransform =
     /* #__PURE__ */
-    factory(name$45, dependencies$46, function (_ref) {
+    factory(name$46, dependencies$47, function (_ref) {
       var typed = _ref.typed,
           add = _ref.add,
           divide = _ref.divide;
@@ -58534,11 +58737,11 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$46 = 'min';
-    var dependencies$47 = ['typed', 'smaller'];
+    var name$47 = 'min';
+    var dependencies$48 = ['typed', 'smaller'];
     var createMinTransform =
     /* #__PURE__ */
-    factory(name$46, dependencies$47, function (_ref) {
+    factory(name$47, dependencies$48, function (_ref) {
       var typed = _ref.typed,
           smaller = _ref.smaller;
       var min = createMin({
@@ -58577,11 +58780,11 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$47 = 'range';
-    var dependencies$48 = ['typed', 'config', '?matrix', '?bignumber', 'smaller', 'smallerEq', 'larger', 'largerEq'];
+    var name$48 = 'range';
+    var dependencies$49 = ['typed', 'config', '?matrix', '?bignumber', 'smaller', 'smallerEq', 'larger', 'largerEq'];
     var createRangeTransform =
     /* #__PURE__ */
-    factory(name$47, dependencies$48, function (_ref) {
+    factory(name$48, dependencies$49, function (_ref) {
       var typed = _ref.typed,
           config = _ref.config,
           matrix = _ref.matrix,
@@ -58624,8 +58827,8 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$48 = 'row';
-    var dependencies$49 = ['typed', 'Index', 'matrix', 'range'];
+    var name$49 = 'row';
+    var dependencies$4a = ['typed', 'Index', 'matrix', 'range'];
     /**
      * Attach a transform function to matrix.column
      * Adds a property transform containing the transform function.
@@ -58636,7 +58839,7 @@ var app = (function () {
 
     var createRowTransform =
     /* #__PURE__ */
-    factory(name$48, dependencies$49, function (_ref) {
+    factory(name$49, dependencies$4a, function (_ref) {
       var typed = _ref.typed,
           Index = _ref.Index,
           matrix = _ref.matrix,
@@ -58669,11 +58872,11 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$49 = 'subset';
-    var dependencies$4a = ['typed', 'matrix'];
+    var name$4a = 'subset';
+    var dependencies$4b = ['typed', 'matrix'];
     var createSubsetTransform =
     /* #__PURE__ */
-    factory(name$49, dependencies$4a, function (_ref) {
+    factory(name$4a, dependencies$4b, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix;
       var subset = createSubset({
@@ -58700,11 +58903,11 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$4a = 'concat';
-    var dependencies$4b = ['typed', 'matrix', 'isInteger'];
+    var name$4b = 'concat';
+    var dependencies$4c = ['typed', 'matrix', 'isInteger'];
     var createConcatTransform =
     /* #__PURE__ */
-    factory(name$4a, dependencies$4b, function (_ref) {
+    factory(name$4b, dependencies$4c, function (_ref) {
       var typed = _ref.typed,
           matrix = _ref.matrix,
           isInteger = _ref.isInteger;
@@ -58744,8 +58947,8 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$4b = 'std';
-    var dependencies$4c = ['typed', 'sqrt', 'variance'];
+    var name$4c = 'std';
+    var dependencies$4d = ['typed', 'sqrt', 'variance'];
     /**
      * Attach a transform function to math.std
      * Adds a property transform containing the transform function.
@@ -58756,7 +58959,7 @@ var app = (function () {
 
     var createStdTransform =
     /* #__PURE__ */
-    factory(name$4b, dependencies$4c, function (_ref) {
+    factory(name$4c, dependencies$4d, function (_ref) {
       var typed = _ref.typed,
           sqrt = _ref.sqrt,
           variance = _ref.variance;
@@ -58797,11 +59000,11 @@ var app = (function () {
      * from one-based to zero based
      */
 
-    var name$4c = 'sum';
-    var dependencies$4d = ['typed', 'config', 'add', '?bignumber', '?fraction'];
+    var name$4d = 'sum';
+    var dependencies$4e = ['typed', 'config', 'add', '?bignumber', '?fraction'];
     var createSumTransform =
     /* #__PURE__ */
-    factory(name$4c, dependencies$4d, function (_ref) {
+    factory(name$4d, dependencies$4e, function (_ref) {
       var typed = _ref.typed,
           config = _ref.config,
           add = _ref.add,
@@ -58814,7 +59017,7 @@ var app = (function () {
         bignumber: bignumber,
         fraction: fraction
       });
-      return typed(name$4c, {
+      return typed(name$4d, {
         '...any': function any(args) {
           // change last argument dim from one-based to zero-based
           if (args.length === 2 && isCollection(args[0])) {
@@ -58838,8 +59041,8 @@ var app = (function () {
       isTransformFunction: true
     });
 
-    var name$4d = 'variance';
-    var dependencies$4e = ['typed', 'add', 'subtract', 'multiply', 'divide', 'apply', 'isNaN'];
+    var name$4e = 'variance';
+    var dependencies$4f = ['typed', 'add', 'subtract', 'multiply', 'divide', 'apply', 'isNaN'];
     /**
      * Attach a transform function to math.var
      * Adds a property transform containing the transform function.
@@ -58850,7 +59053,7 @@ var app = (function () {
 
     var createVarianceTransform =
     /* #__PURE__ */
-    factory(name$4d, dependencies$4e, function (_ref) {
+    factory(name$4e, dependencies$4f, function (_ref) {
       var typed = _ref.typed,
           add = _ref.add,
           subtract = _ref.subtract,
@@ -58867,7 +59070,7 @@ var app = (function () {
         apply: apply,
         isNaN: isNaN
       });
-      return typed(name$4d, {
+      return typed(name$4e, {
         '...any': function any(args) {
           // change last argument dim from one-based to zero-based
           if (args.length >= 2 && isCollection(args[0])) {
@@ -59124,6 +59327,7 @@ var app = (function () {
     createSign({
       BigNumber: BigNumber,
       Fraction: Fraction$1,
+      complex: complex$1,
       typed: typed
     });
     var square =
@@ -59395,6 +59599,11 @@ var app = (function () {
     var sin =
     /* #__PURE__ */
     createSin({
+      typed: typed
+    });
+    var combinationsWithRep =
+    /* #__PURE__ */
+    createCombinationsWithRep({
       typed: typed
     });
     var random =
@@ -60307,8 +60516,10 @@ var app = (function () {
     /* #__PURE__ */
     createQr({
       addScalar: addScalar,
+      complex: complex$1,
       conj: conj,
       divideScalar: divideScalar,
+      equal: equal,
       identity: identity,
       isZero: isZero,
       matrix: matrix,
@@ -60318,7 +60529,6 @@ var app = (function () {
       subtract: subtract,
       typed: typed,
       unaryMinus: unaryMinus,
-      unequal: unequal,
       zeros: zeros$1
     });
     var inv =
@@ -60856,7 +61066,7 @@ var app = (function () {
       config: config
     });
 
-    function _extends$5() { _extends$5 = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends$5.apply(this, arguments); }
+    function _extends$6() { _extends$6 = Object.assign || function (target) { for (var i = 1; i < arguments.length; i++) { var source = arguments[i]; for (var key in source) { if (Object.prototype.hasOwnProperty.call(source, key)) { target[key] = source[key]; } } } return target; }; return _extends$6.apply(this, arguments); }
     var math = {}; // NOT pure!
 
     var mathWithTransform = {}; // NOT pure!
@@ -60912,16 +61122,15 @@ var app = (function () {
       Node: Node,
       subset: subset
     });
+    var IndexNode = createIndexNode({
+      Node: Node,
+      Range: Range,
+      size: size
+    });
     var AssignmentNode = createAssignmentNode({
       matrix: matrix,
       Node: Node,
       subset: subset
-    });
-    var IndexNode = createIndexNode({
-      Index: Index,
-      Node: Node,
-      Range: Range,
-      size: size
     });
     var SymbolNode = createSymbolNode({
       Unit: Unit,
@@ -60962,6 +61171,14 @@ var app = (function () {
     });
     var Help = createHelpClass({
       parse: parse
+    });
+    var compile = createCompile({
+      parse: parse,
+      typed: typed
+    });
+    var parser = createParser({
+      Parser: Parser,
+      typed: typed
     });
     var simplify = createSimplify({
       bignumber: bignumber,
@@ -61009,14 +61226,6 @@ var app = (function () {
       mathWithTransform: mathWithTransform,
       typed: typed
     });
-    var compile = createCompile({
-      parse: parse,
-      typed: typed
-    });
-    var parser = createParser({
-      Parser: Parser,
-      typed: typed
-    });
     var derivative = createDerivative({
       ConstantNode: ConstantNode,
       FunctionNode: FunctionNode,
@@ -61032,7 +61241,7 @@ var app = (function () {
       typed: typed
     });
 
-    _extends$5(math, {
+    _extends$6(math, {
       'typeof': typeOf$1,
       eye: eye,
       reviver: reviver,
@@ -61123,6 +61332,7 @@ var app = (function () {
       cos: cos,
       csc: csc,
       sin: sin,
+      combinationsWithRep: combinationsWithRep,
       random: random,
       version: version$1,
       isNegative: isNegative,
@@ -61275,6 +61485,8 @@ var app = (function () {
       wienDisplacement: wienDisplacement,
       log: log$1,
       unit: unit,
+      parse: parse,
+      evaluate: evaluate,
       divide: divide,
       median: median,
       variance: variance,
@@ -61287,8 +61499,8 @@ var app = (function () {
       planckTime: planckTime,
       thomsonCrossSection: thomsonCrossSection,
       log1p: log1p$1,
-      parse: parse,
-      evaluate: evaluate,
+      compile: compile,
+      parser: parser,
       mean: mean,
       'var': variance,
       simplify: simplify,
@@ -61296,20 +61508,18 @@ var app = (function () {
       gasConstant: gasConstant,
       planckConstant: planckConstant,
       setUnion: setUnion,
-      'eval': evaluate,
       help: help,
       kldivergence: kldivergence,
       coulomb: coulomb,
       rydberg: rydberg,
-      compile: compile,
+      'eval': evaluate,
+      derivative: derivative,
       mad: mad,
       magneticFluxQuantum: magneticFluxQuantum,
-      parser: parser,
-      derivative: derivative,
       config: config
     });
 
-    _extends$5(mathWithTransform, math, {
+    _extends$6(mathWithTransform, math, {
       apply: createApplyTransform({
         isInteger: isInteger$1,
         typed: typed
@@ -61393,7 +61603,7 @@ var app = (function () {
       })
     });
 
-    _extends$5(classes, {
+    _extends$6(classes, {
       ResultSet: ResultSet,
       Complex: Complex$1,
       Range: Range,
@@ -61417,11 +61627,11 @@ var app = (function () {
       ImmutableDenseMatrix: ImmutableDenseMatrix,
       FibonacciHeap: FibonacciHeap,
       AccessorNode: AccessorNode,
+      IndexNode: IndexNode,
       Spa: Spa,
       AssignmentNode: AssignmentNode,
       Index: Index,
       Unit: Unit,
-      IndexNode: IndexNode,
       SymbolNode: SymbolNode,
       FunctionNode: FunctionNode,
       Parser: Parser,
@@ -61505,75 +61715,92 @@ var app = (function () {
 
     };
 
-    /* src/components/MathInput/MathInput.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/MathInput/MathInput.svelte generated by Svelte v3.16.4 */
     const file = "src/components/MathInput/MathInput.svelte";
 
     function create_fragment(ctx) {
-    	var input, input_value_value, dispose;
+    	let input;
+    	let input_value_value;
+    	let dispose;
 
-    	return {
+    	const block = {
     		c: function create() {
     			input = element("input");
-    			attr(input, "type", "text");
-    			input.value = input_value_value = ctx.$mathInputStore.value;
-    			attr(input, "class", "border-gray-400 focus:border-blue-400 p-2 w-full font-mono");
+    			attr_dev(input, "type", "text");
+    			input.value = input_value_value = /*$mathInputStore*/ ctx[0].value;
+    			attr_dev(input, "class", "border-gray-400 focus:border-blue-400 p-2 w-full font-mono");
     			add_location(input, file, 14, 0, 331);
 
     			dispose = [
-    				listen(input, "keyup", handleKeyUp),
-    				listen(input, "mouseup", handleMouseUp)
+    				listen_dev(input, "keyup", handleKeyUp, false, false, false),
+    				listen_dev(input, "mouseup", handleMouseUp, false, false, false)
     			];
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, input, anchor);
+    			insert_dev(target, input, anchor);
     		},
-
-    		p: function update(changed, ctx) {
-    			if ((changed.$mathInputStore) && input_value_value !== (input_value_value = ctx.$mathInputStore.value)) {
-    				input.value = input_value_value;
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*$mathInputStore*/ 1 && input_value_value !== (input_value_value = /*$mathInputStore*/ ctx[0].value)) {
+    				prop_dev(input, "value", input_value_value);
     			}
     		},
-
     		i: noop,
     		o: noop,
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(input);
-    			}
-
+    			if (detaching) detach_dev(input);
     			run_all(dispose);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function handleKeyUp(evt) {
     	mathInputStore.setValue(evt.target.value, evt.target.selectionStart, evt.target.selectionEnd);
     }
 
-    function handleMouseUp({target: {selectionStart, selectionEnd}}) {
+    function handleMouseUp({ target: { selectionStart, selectionEnd } }) {
     	mathInputStore.setSelection(selectionStart, selectionEnd);
     }
 
     function instance($$self, $$props, $$invalidate) {
     	let $mathInputStore;
+    	validate_store(mathInputStore, "mathInputStore");
+    	component_subscribe($$self, mathInputStore, $$value => $$invalidate(0, $mathInputStore = $$value));
 
-    	validate_store(mathInputStore, 'mathInputStore');
-    	component_subscribe($$self, mathInputStore, $$value => { $mathInputStore = $$value; $$invalidate('$mathInputStore', $mathInputStore); });
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
 
-    	return { $mathInputStore };
+    	$$self.$inject_state = $$props => {
+    		if ("$mathInputStore" in $$props) mathInputStore.set($mathInputStore = $$props.$mathInputStore);
+    	};
+
+    	return [$mathInputStore];
     }
 
     class MathInput extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance, create_fragment, safe_not_equal, []);
+    		init(this, options, instance, create_fragment, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "MathInput",
+    			options,
+    			id: create_fragment.name
+    		});
     	}
     }
 
@@ -61933,13 +62160,23 @@ var app = (function () {
 
       return value;
     };
+    /**
+     * Return the protocol of a URL, or "_relative" if the URL does not specify a
+     * protocol (and thus is relative).
+     */
+
+    var protocolFromUrl = function protocolFromUrl(url) {
+      var protocol = /^\s*([^\\/#]*?)(?::|&#0*58|&#x0*3a)/i.exec(url);
+      return protocol != null ? protocol[1] : "_relative";
+    };
     /* harmony default export */ var utils = ({
       contains: contains,
       deflt: deflt,
       escape: utils_escape,
       hyphenate: hyphenate,
       getBaseElem: getBaseElem,
-      isCharacterBox: utils_isCharacterBox
+      isCharacterBox: utils_isCharacterBox,
+      protocolFromUrl: protocolFromUrl
     });
     // CONCATENATED MODULE: ./src/Settings.js
     /* eslint no-console:0 */
@@ -61967,29 +62204,33 @@ var app = (function () {
     function () {
       function Settings(options) {
         this.displayMode = void 0;
+        this.output = void 0;
         this.leqno = void 0;
         this.fleqn = void 0;
         this.throwOnError = void 0;
         this.errorColor = void 0;
         this.macros = void 0;
+        this.minRuleThickness = void 0;
         this.colorIsTextColor = void 0;
         this.strict = void 0;
+        this.trust = void 0;
         this.maxSize = void 0;
         this.maxExpand = void 0;
-        this.allowedProtocols = void 0;
         // allow null options
         options = options || {};
         this.displayMode = utils.deflt(options.displayMode, false);
+        this.output = utils.deflt(options.output, "htmlAndMathml");
         this.leqno = utils.deflt(options.leqno, false);
         this.fleqn = utils.deflt(options.fleqn, false);
         this.throwOnError = utils.deflt(options.throwOnError, true);
         this.errorColor = utils.deflt(options.errorColor, "#cc0000");
         this.macros = options.macros || {};
+        this.minRuleThickness = Math.max(0, utils.deflt(options.minRuleThickness, 0));
         this.colorIsTextColor = utils.deflt(options.colorIsTextColor, false);
         this.strict = utils.deflt(options.strict, "warn");
+        this.trust = utils.deflt(options.trust, false);
         this.maxSize = Math.max(0, utils.deflt(options.maxSize, Infinity));
         this.maxExpand = Math.max(0, utils.deflt(options.maxExpand, 1000));
-        this.allowedProtocols = utils.deflt(options.allowedProtocols, ["http", "https", "mailto", "_relative"]);
       }
       /**
        * Report nonstrict (non-LaTeX-compatible) input.
@@ -62056,12 +62297,30 @@ var app = (function () {
           typeof console !== "undefined" && console.warn("LaTeX-incompatible input and strict mode is set to " + ("unrecognized '" + strict + "': " + errorMsg + " [" + errorCode + "]"));
           return false;
         }
+      }
+      /**
+       * Check whether to test potentially dangerous input, and return
+       * `true` (trusted) or `false` (untrusted).  The sole argument `context`
+       * should be an object with `command` field specifying the relevant LaTeX
+       * command (as a string starting with `\`), and any other arguments, etc.
+       * If `context` has a `url` field, a `protocol` field will automatically
+       * get added by this function (changing the specified object).
+       */
+      ;
+
+      _proto.isTrusted = function isTrusted(context) {
+        if (context.url && !context.protocol) {
+          context.protocol = utils.protocolFromUrl(context.url);
+        }
+
+        var trust = typeof this.trust === "function" ? this.trust(context) : this.trust;
+        return Boolean(trust);
       };
 
       return Settings;
     }();
 
-    /* harmony default export */ var src_Settings = (Settings_Settings);
+
     // CONCATENATED MODULE: ./src/Style.js
     /**
      * This file contains information and classes for the various kinds of styles
@@ -62292,25 +62551,97 @@ var app = (function () {
     }
     // CONCATENATED MODULE: ./src/svgGeometry.js
     /**
-     * This file provides support to domTree.js
+     * This file provides support to domTree.js and delimiter.js.
      * It's a storehouse of path geometry for SVG images.
      */
     // In all paths below, the viewBox-to-em scale is 1000:1.
-    var hLinePad = 80; // padding above a sqrt viniculum.
+    var hLinePad = 80; // padding above a sqrt viniculum. Prevents image cropping.
+    // The viniculum of a \sqrt can be made thicker by a KaTeX rendering option.
+    // Think of variable extraViniculum as two detours in the SVG path.
+    // The detour begins at the lower left of the area labeled extraViniculum below.
+    // The detour proceeds one extraViniculum distance up and slightly to the right,
+    // displacing the radiused corner between surd and viniculum. The radius is
+    // traversed as usual, then the detour resumes. It goes right, to the end of
+    // the very long viniculumn, then down one extraViniculum distance,
+    // after which it resumes regular path geometry for the radical.
 
-    var svgGeometry_path = {
+    /*                                                  viniculum
+                                                       /
+             /▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒←extraViniculum
+            / █████████████████████←0.04em (40 unit) std viniculum thickness
+           / /
+          / /
+         / /\
+        / / surd
+    */
+
+    var sqrtMain = function sqrtMain(extraViniculum, hLinePad) {
       // sqrtMain path geometry is from glyph U221A in the font KaTeX Main
-      // All surds have 80 units padding above the viniculumn.
-      sqrtMain: "M95," + (622 + hLinePad) + "c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,\n-10,-9.5,-14c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54c44.2,-33.3,65.8,\n-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10s173,378,173,378c0.7,0,\n35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429c69,-144,104.5,-217.7,106.5,\n-221c5.3,-9.3,12,-14,20,-14H400000v40H845.2724s-225.272,467,-225.272,467\ns-235,486,-235,486c-2.7,4.7,-9,7,-19,7c-6,0,-10,-1,-12,-3s-194,-422,-194,-422\ns-65,47,-65,47z M834 " + hLinePad + "H400000v40H845z",
+      return "M95," + (622 + extraViniculum + hLinePad) + "\nc-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14\nc0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54\nc44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10\ns173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429\nc69,-144,104.5,-217.7,106.5,-221\nl" + extraViniculum / 2.075 + " -" + extraViniculum + "\nc5.3,-9.3,12,-14,20,-14\nH400000v" + (40 + extraViniculum) + "H845.2724\ns-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7\nc-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z\nM" + (834 + extraViniculum) + " " + hLinePad + "h400000v" + (40 + extraViniculum) + "h-400000z";
+    };
+
+    var sqrtSize1 = function sqrtSize1(extraViniculum, hLinePad) {
       // size1 is from glyph U221A in the font KaTeX_Size1-Regular
-      sqrtSize1: "M263," + (601 + hLinePad) + "c0.7,0,18,39.7,52,119c34,79.3,68.167,\n158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120c340,-704.7,510.7,-1060.3,512,-1067\nc4.7,-7.3,11,-11,19,-11H40000v40H1012.3s-271.3,567,-271.3,567c-38.7,80.7,-84,\n175,-136,283c-52,108,-89.167,185.3,-111.5,232c-22.3,46.7,-33.8,70.3,-34.5,71\nc-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1s-109,-253,-109,-253c-72.7,-168,-109.3,\n-252,-110,-252c-10.7,8,-22,16.7,-34,26c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26\ns76,-59,76,-59s76,-60,76,-60z M1001 " + hLinePad + "H40000v40H1012z",
+      return "M263," + (601 + extraViniculum + hLinePad) + "c0.7,0,18,39.7,52,119\nc34,79.3,68.167,158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120\nc340,-704.7,510.7,-1060.3,512,-1067\nl" + extraViniculum / 2.084 + " -" + extraViniculum + "\nc4.7,-7.3,11,-11,19,-11\nH40000v" + (40 + extraViniculum) + "H1012.3\ns-271.3,567,-271.3,567c-38.7,80.7,-84,175,-136,283c-52,108,-89.167,185.3,-111.5,232\nc-22.3,46.7,-33.8,70.3,-34.5,71c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1\ns-109,-253,-109,-253c-72.7,-168,-109.3,-252,-110,-252c-10.7,8,-22,16.7,-34,26\nc-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26s76,-59,76,-59s76,-60,76,-60z\nM" + (1001 + extraViniculum) + " " + hLinePad + "h400000v" + (40 + extraViniculum) + "h-400000z";
+    };
+
+    var sqrtSize2 = function sqrtSize2(extraViniculum, hLinePad) {
       // size2 is from glyph U221A in the font KaTeX_Size2-Regular
-      // The 80 units padding is most obvious here. Note start node at M1001 80.
-      sqrtSize2: "M1001," + hLinePad + "H400000v40H1013.1s-83.4,268,-264.1,840c-180.7,\n572,-277,876.3,-289,913c-4.7,4.7,-12.7,7,-24,7s-12,0,-12,0c-1.3,-3.3,-3.7,-11.7,\n-7,-25c-35.3,-125.3,-106.7,-373.3,-214,-744c-10,12,-21,25,-33,39s-32,39,-32,39\nc-6,-5.3,-15,-14,-27,-26s25,-30,25,-30c26.7,-32.7,52,-63,76,-91s52,-60,52,-60\ns208,722,208,722c56,-175.3,126.3,-397.3,211,-666c84.7,-268.7,153.8,-488.2,207.5,\n-658.5c53.7,-170.3,84.5,-266.8,92.5,-289.5c4,-6.7,10,-10,18,-10z\nM1001 " + hLinePad + "H400000v40H1013z",
+      return "M983 " + (10 + extraViniculum + hLinePad) + "\nl" + extraViniculum / 3.13 + " -" + extraViniculum + "\nc4,-6.7,10,-10,18,-10 H400000v" + (40 + extraViniculum) + "\nH1013.1s-83.4,268,-264.1,840c-180.7,572,-277,876.3,-289,913c-4.7,4.7,-12.7,7,-24,7\ns-12,0,-12,0c-1.3,-3.3,-3.7,-11.7,-7,-25c-35.3,-125.3,-106.7,-373.3,-214,-744\nc-10,12,-21,25,-33,39s-32,39,-32,39c-6,-5.3,-15,-14,-27,-26s25,-30,25,-30\nc26.7,-32.7,52,-63,76,-91s52,-60,52,-60s208,722,208,722\nc56,-175.3,126.3,-397.3,211,-666c84.7,-268.7,153.8,-488.2,207.5,-658.5\nc53.7,-170.3,84.5,-266.8,92.5,-289.5z\nM" + (1001 + extraViniculum) + " " + hLinePad + "h400000v" + (40 + extraViniculum) + "h-400000z";
+    };
+
+    var sqrtSize3 = function sqrtSize3(extraViniculum, hLinePad) {
       // size3 is from glyph U221A in the font KaTeX_Size3-Regular
-      sqrtSize3: "M424," + (2398 + hLinePad) + "c-1.3,-0.7,-38.5,-172,-111.5,-514c-73,\n-342,-109.8,-513.3,-110.5,-514c0,-2,-10.7,14.3,-32,49c-4.7,7.3,-9.8,15.7,-15.5,\n25c-5.7,9.3,-9.8,16,-12.5,20s-5,7,-5,7c-4,-3.3,-8.3,-7.7,-13,-13s-13,-13,-13,\n-13s76,-122,76,-122s77,-121,77,-121s209,968,209,968c0,-2,84.7,-361.7,254,-1079\nc169.3,-717.3,254.7,-1077.7,256,-1081c4,-6.7,10,-10,18,-10H400000v40H1014.6\ns-87.3,378.7,-272.6,1166c-185.3,787.3,-279.3,1182.3,-282,1185c-2,6,-10,9,-24,9\nc-8,0,-12,-0.7,-12,-2z M1001 " + hLinePad + "H400000v40H1014z",
+      return "M424," + (2398 + extraViniculum + hLinePad) + "\nc-1.3,-0.7,-38.5,-172,-111.5,-514c-73,-342,-109.8,-513.3,-110.5,-514\nc0,-2,-10.7,14.3,-32,49c-4.7,7.3,-9.8,15.7,-15.5,25c-5.7,9.3,-9.8,16,-12.5,20\ns-5,7,-5,7c-4,-3.3,-8.3,-7.7,-13,-13s-13,-13,-13,-13s76,-122,76,-122s77,-121,77,-121\ns209,968,209,968c0,-2,84.7,-361.7,254,-1079c169.3,-717.3,254.7,-1077.7,256,-1081\nl" + extraViniculum / 4.223 + " -" + extraViniculum + "c4,-6.7,10,-10,18,-10 H400000\nv" + (40 + extraViniculum) + "H1014.6\ns-87.3,378.7,-272.6,1166c-185.3,787.3,-279.3,1182.3,-282,1185\nc-2,6,-10,9,-24,9\nc-8,0,-12,-0.7,-12,-2z M" + (1001 + extraViniculum) + " " + hLinePad + "\nh400000v" + (40 + extraViniculum) + "h-400000z";
+    };
+
+    var sqrtSize4 = function sqrtSize4(extraViniculum, hLinePad) {
       // size4 is from glyph U221A in the font KaTeX_Size4-Regular
-      sqrtSize4: "M473," + (2713 + hLinePad) + "c339.3,-1799.3,509.3,-2700,510,-2702\nc3.3,-7.3,9.3,-11,18,-11H400000v40H1017.7s-90.5,478,-276.2,1466c-185.7,988,\n-279.5,1483,-281.5,1485c-2,6,-10,9,-24,9c-8,0,-12,-0.7,-12,-2c0,-1.3,-5.3,-32,\n-16,-92c-50.7,-293.3,-119.7,-693.3,-207,-1200c0,-1.3,-5.3,8.7,-16,30c-10.7,\n21.3,-21.3,42.7,-32,64s-16,33,-16,33s-26,-26,-26,-26s76,-153,76,-153s77,-151,\n77,-151c0.7,0.7,35.7,202,105,604c67.3,400.7,102,602.7,104,606z\nM1001 " + hLinePad + "H400000v40H1017z",
+      return "M473," + (2713 + extraViniculum + hLinePad) + "\nc339.3,-1799.3,509.3,-2700,510,-2702 l" + extraViniculum / 5.298 + " -" + extraViniculum + "\nc3.3,-7.3,9.3,-11,18,-11 H400000v" + (40 + extraViniculum) + "H1017.7\ns-90.5,478,-276.2,1466c-185.7,988,-279.5,1483,-281.5,1485c-2,6,-10,9,-24,9\nc-8,0,-12,-0.7,-12,-2c0,-1.3,-5.3,-32,-16,-92c-50.7,-293.3,-119.7,-693.3,-207,-1200\nc0,-1.3,-5.3,8.7,-16,30c-10.7,21.3,-21.3,42.7,-32,64s-16,33,-16,33s-26,-26,-26,-26\ns76,-153,76,-153s77,-151,77,-151c0.7,0.7,35.7,202,105,604c67.3,400.7,102,602.7,104,\n606zM" + (1001 + extraViniculum) + " " + hLinePad + "h400000v" + (40 + extraViniculum) + "H1017.7z";
+    };
+
+    var sqrtTall = function sqrtTall(extraViniculum, hLinePad, viewBoxHeight) {
+      // sqrtTall is from glyph U23B7 in the font KaTeX_Size4-Regular
+      // One path edge has a variable length. It runs vertically from the viniculumn
+      // to a point near (14 units) the bottom of the surd. The viniculum
+      // is normally 40 units thick. So the length of the line in question is:
+      var vertSegment = viewBoxHeight - 54 - hLinePad - extraViniculum;
+      return "M702 " + (extraViniculum + hLinePad) + "H400000" + (40 + extraViniculum) + "\nH742v" + vertSegment + "l-4 4-4 4c-.667.7 -2 1.5-4 2.5s-4.167 1.833-6.5 2.5-5.5 1-9.5 1\nh-12l-28-84c-16.667-52-96.667 -294.333-240-727l-212 -643 -85 170\nc-4-3.333-8.333-7.667-13 -13l-13-13l77-155 77-156c66 199.333 139 419.667\n219 661 l218 661zM702 " + hLinePad + "H400000v" + (40 + extraViniculum) + "H742z";
+    };
+
+    var sqrtPath = function sqrtPath(size, extraViniculum, viewBoxHeight) {
+      extraViniculum = 1000 * extraViniculum; // Convert from document ems to viewBox.
+
+      var path = "";
+
+      switch (size) {
+        case "sqrtMain":
+          path = sqrtMain(extraViniculum, hLinePad);
+          break;
+
+        case "sqrtSize1":
+          path = sqrtSize1(extraViniculum, hLinePad);
+          break;
+
+        case "sqrtSize2":
+          path = sqrtSize2(extraViniculum, hLinePad);
+          break;
+
+        case "sqrtSize3":
+          path = sqrtSize3(extraViniculum, hLinePad);
+          break;
+
+        case "sqrtSize4":
+          path = sqrtSize4(extraViniculum, hLinePad);
+          break;
+
+        case "sqrtTall":
+          path = sqrtTall(extraViniculum, hLinePad, viewBoxHeight);
+      }
+
+      return path;
+    };
+    var svgGeometry_path = {
       // The doubleleftarrow geometry is from glyph U+21D0 in the font KaTeX Main
       doubleleftarrow: "M262 157\nl10-10c34-36 62.7-77 86-123 3.3-8 5-13.3 5-16 0-5.3-6.7-8-20-8-7.3\n 0-12.2.5-14.5 1.5-2.3 1-4.8 4.5-7.5 10.5-49.3 97.3-121.7 169.3-217 216-28\n 14-57.3 25-88 33-6.7 2-11 3.8-13 5.5-2 1.7-3 4.2-3 7.5s1 5.8 3 7.5\nc2 1.7 6.3 3.5 13 5.5 68 17.3 128.2 47.8 180.5 91.5 52.3 43.7 93.8 96.2 124.5\n 157.5 9.3 8 15.3 12.3 18 13h6c12-.7 18-4 18-10 0-2-1.7-7-5-15-23.3-46-52-87\n-86-123l-10-10h399738v-40H218c328 0 0 0 0 0l-10-8c-26.7-20-65.7-43-117-69 2.7\n-2 6-3.7 10-5 36.7-16 72.3-37.3 107-64l10-8h399782v-40z\nm8 0v40h399730v-40zm0 194v40h399730v-40z",
       // doublerightarrow is from glyph U+21D2 in font KaTeX Main
@@ -62388,9 +62719,6 @@ var app = (function () {
       shortbaraboveleftharpoon: "M7,435c-4,4,-6.3,8.7,-7,14c0,5.3,0.7,9,2,11\nc1.3,2,5.3,5.3,12,10c90.7,54,156,130,196,228c3.3,10.7,6.3,16.3,9,17c2,0.7,5,1,9,\n1c0,0,5,0,5,0c10.7,0,16.7,-2,18,-6c2,-2.7,1,-9.7,-3,-21c-32,-87.3,-82.7,-157.7,\n-152,-211c0,0,-3,-3,-3,-3l399907,0l0,-40c-399126,0,-399993,0,-399993,0z\nM93 435 v40 H400000 v-40z M500 241 v40 H400000 v-40z M500 241 v40 H400000 v-40z",
       shortrightharpoonabovebar: "M53,241l0,40c398570,0,399437,0,399437,0\nc4.7,-4.7,7,-9.3,7,-14c0,-9.3,-3.7,-15.3,-11,-18c-92.7,-56.7,-159,-133.7,-199,\n-231c-3.3,-9.3,-6,-14.7,-8,-16c-2,-1.3,-7,-2,-15,-2c-10.7,0,-16.7,2,-18,6\nc-2,2.7,-1,9.7,3,21c15.3,42,36.7,81.8,64,119.5c27.3,37.7,58,69.2,92,94.5z\nM500 241 v40 H399408 v-40z M500 435 v40 H400000 v-40z"
     };
-    /* harmony default export */ var svgGeometry = ({
-      path: svgGeometry_path
-    });
     // CONCATENATED MODULE: ./src/tree.js
 
 
@@ -62686,6 +63014,70 @@ var app = (function () {
 
       return Anchor;
     }();
+    /**
+     * This node represents an image embed (<img>) element.
+     */
+
+    var domTree_Img =
+    /*#__PURE__*/
+    function () {
+      function Img(src, alt, style) {
+        this.src = void 0;
+        this.alt = void 0;
+        this.classes = void 0;
+        this.height = void 0;
+        this.depth = void 0;
+        this.maxFontSize = void 0;
+        this.style = void 0;
+        this.alt = alt;
+        this.src = src;
+        this.classes = ["mord"];
+        this.style = style;
+      }
+
+      var _proto3 = Img.prototype;
+
+      _proto3.hasClass = function hasClass(className) {
+        return utils.contains(this.classes, className);
+      };
+
+      _proto3.toNode = function toNode() {
+        var node = document.createElement("img");
+        node.src = this.src;
+        node.alt = this.alt;
+        node.className = "mord"; // Apply inline styles
+
+        for (var style in this.style) {
+          if (this.style.hasOwnProperty(style)) {
+            // $FlowFixMe
+            node.style[style] = this.style[style];
+          }
+        }
+
+        return node;
+      };
+
+      _proto3.toMarkup = function toMarkup() {
+        var markup = "<img  src='" + this.src + " 'alt='" + this.alt + "' "; // Add the styles, after hyphenation
+
+        var styles = "";
+
+        for (var style in this.style) {
+          if (this.style.hasOwnProperty(style)) {
+            styles += utils.hyphenate(style) + ":" + this.style[style] + ";";
+          }
+        }
+
+        if (styles) {
+          markup += " style=\"" + utils.escape(styles) + "\"";
+        }
+
+        markup += "'/>";
+        return markup;
+      };
+
+      return Img;
+    }();
     var iCombinations = {
       'î': "\u0131\u0302",
       'ï': "\u0131\u0308",
@@ -62890,7 +63282,7 @@ var app = (function () {
         this.pathName = void 0;
         this.alternate = void 0;
         this.pathName = pathName;
-        this.alternate = alternate; // Used only for tall \sqrt
+        this.alternate = alternate; // Used only for \sqrt
       }
 
       var _proto6 = PathNode.prototype;
@@ -62902,7 +63294,7 @@ var app = (function () {
         if (this.alternate) {
           node.setAttribute("d", this.alternate);
         } else {
-          node.setAttribute("d", svgGeometry.path[this.pathName]);
+          node.setAttribute("d", svgGeometry_path[this.pathName]);
         }
 
         return node;
@@ -62912,7 +63304,7 @@ var app = (function () {
         if (this.alternate) {
           return "<path d='" + this.alternate + "'/>";
         } else {
-          return "<path d='" + svgGeometry.path[this.pathName] + "'/>";
+          return "<path d='" + svgGeometry_path[this.pathName] + "'/>";
         }
       };
 
@@ -65202,7 +65594,15 @@ var app = (function () {
       ptPerEm: [10.0, 10.0, 10.0],
       // The space between adjacent `|` columns in an array definition. From
       // `\showthe\doublerulesep` in LaTeX. Equals 2.0 / ptPerEm.
-      doubleRuleSep: [0.2, 0.2, 0.2]
+      doubleRuleSep: [0.2, 0.2, 0.2],
+      // The width of separator lines in {array} environments. From
+      // `\showthe\arrayrulewidth` in LaTeX. Equals 0.4 / ptPerEm.
+      arrayRuleWidth: [0.04, 0.04, 0.04],
+      // Two values from LaTeX source2e:
+      fboxsep: [0.3, 0.3, 0.3],
+      //        3 pt / ptPerEm
+      fboxrule: [0.04, 0.04, 0.04] // 0.4 pt / ptPerEm
+
     }; // This map contains a mapping from font name and character code to character
     // metrics, including height, depth, italic correction, and skew (kern from the
     // character to the corresponding \skewchar)
@@ -65654,7 +66054,7 @@ var app = (function () {
     defineSymbol(symbols_math, ams, symbols_textord, "\u2138", "\\daleth", true);
     defineSymbol(symbols_math, ams, symbols_textord, "\u2137", "\\gimel", true); // AMS Greek
 
-    defineSymbol(symbols_math, ams, symbols_textord, "\u03DD", "\\digamma");
+    defineSymbol(symbols_math, ams, symbols_textord, "\u03DD", "\\digamma", true);
     defineSymbol(symbols_math, ams, symbols_textord, "\u03F0", "\\varkappa"); // AMS Delimiters
 
     defineSymbol(symbols_math, ams, symbols_open, "\u250C", "\\ulcorner", true);
@@ -66402,6 +66802,7 @@ var app = (function () {
         this.fontShape = void 0;
         this.sizeMultiplier = void 0;
         this.maxSize = void 0;
+        this.minRuleThickness = void 0;
         this._fontMetrics = void 0;
         this.style = data.style;
         this.color = data.color;
@@ -66414,6 +66815,7 @@ var app = (function () {
         this.fontShape = data.fontShape || '';
         this.sizeMultiplier = sizeMultipliers[this.size - 1];
         this.maxSize = data.maxSize;
+        this.minRuleThickness = data.minRuleThickness;
         this._fontMetrics = undefined;
       }
       /**
@@ -66435,7 +66837,8 @@ var app = (function () {
           fontFamily: this.fontFamily,
           fontWeight: this.fontWeight,
           fontShape: this.fontShape,
-          maxSize: this.maxSize
+          maxSize: this.maxSize,
+          minRuleThickness: this.minRuleThickness
         };
 
         for (var key in extension) {
@@ -66832,7 +67235,7 @@ var app = (function () {
         symbolNode = new domTree_SymbolNode(value, metrics.height, metrics.depth, italic, metrics.skew, metrics.width, classes);
       } else {
         // TODO(emily): Figure out a good way to only print this in development
-        typeof console !== "undefined" && console.warn("No character metrics for '" + value + "' in style '" + fontName + "'");
+        typeof console !== "undefined" && console.warn("No character metrics " + ("for '" + value + "' in style '" + fontName + "' and mode '" + mode + "'"));
         symbolNode = new domTree_SymbolNode(value, 0, 0, 0, 0, 0, classes);
       }
 
@@ -66855,8 +67258,6 @@ var app = (function () {
     /**
      * Makes a symbol in Main-Regular or AMS-Regular.
      * Used for rel, bin, open, close, inner, and punct.
-     *
-     * TODO(#953): Make `options` mandatory and always pass it in.
      */
 
 
@@ -66872,7 +67273,7 @@ var app = (function () {
       // text ordinal and is therefore not present as a symbol in the symbols
       // table for text, as well as a special case for boldsymbol because it
       // can be used for bold + and -
-      if (options && options.font && options.font === "boldsymbol" && buildCommon_lookupSymbol(value, "Main-Bold", mode).metrics) {
+      if (options.font === "boldsymbol" && buildCommon_lookupSymbol(value, "Main-Bold", mode).metrics) {
         return buildCommon_makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
       } else if (value === "\\" || src_symbols[mode][value].font === "main") {
         return buildCommon_makeSymbol(value, "Main-Regular", mode, options, classes);
@@ -67136,7 +67537,7 @@ var app = (function () {
 
     var makeLineSpan = function makeLineSpan(className, options, thickness) {
       var line = buildCommon_makeSpan([className], [], options);
-      line.height = thickness || options.fontMetrics().defaultRuleThickness;
+      line.height = Math.max(thickness || options.fontMetrics().defaultRuleThickness, options.minRuleThickness);
       line.style.borderBottomWidth = line.height + "em";
       line.maxFontSize = 1.0;
       return line;
@@ -67705,7 +68106,6 @@ var app = (function () {
     var _mathmlGroupBuilders = {};
     function defineFunction(_ref) {
       var type = _ref.type,
-          nodeType = _ref.nodeType,
           names = _ref.names,
           props = _ref.props,
           handler = _ref.handler,
@@ -67721,15 +68121,10 @@ var app = (function () {
         allowedInMath: props.allowedInMath === undefined ? true : props.allowedInMath,
         numOptionalArgs: props.numOptionalArgs || 0,
         infix: !!props.infix,
-        consumeMode: props.consumeMode,
         handler: handler
       };
 
       for (var i = 0; i < names.length; ++i) {
-        // TODO: The value type of _functions should be a type union of all
-        // possible `FunctionSpec<>` possibilities instead of `FunctionSpec<*>`,
-        // which is an existential type.
-        // $FlowFixMe
         _functions[names[i]] = data;
       }
 
@@ -67794,7 +68189,7 @@ var app = (function () {
 
     var binLeftCanceller = ["leftmost", "mbin", "mopen", "mrel", "mop", "mpunct"];
     var binRightCanceller = ["rightmost", "mrel", "mclose", "mpunct"];
-    var buildHTML_styleMap = {
+    var styleMap = {
       "display": src_Style.DISPLAY,
       "text": src_Style.TEXT,
       "script": src_Style.SCRIPT,
@@ -67852,7 +68247,7 @@ var app = (function () {
         if (!node) ; else if (node.type === "sizing") {
           glueOptions = options.havingSize(node.size);
         } else if (node.type === "styling") {
-          glueOptions = options.havingStyle(buildHTML_styleMap[node.style]);
+          glueOptions = options.havingStyle(styleMap[node.style]);
         }
       } // Dummy spans for determining spacings between surrounding atoms.
       // If `expression` has no atoms on the left or right, class "leftmost"
@@ -67912,6 +68307,7 @@ var app = (function () {
 
         if (partialGroup) {
           // Recursive DFS
+          // $FlowFixMe: make nodes a $ReadOnlyArray by returning a new array
           traverseNonSpaceNodes(partialGroup.children, callback, prev);
           continue;
         } // Ignore explicit spaces (e.g., \;, \,) when determining what implicit
@@ -68452,6 +68848,19 @@ var app = (function () {
         return "italic";
       } else if (font === "boldsymbol") {
         return "bold-italic";
+      } else if (font === "mathbf") {
+        return "bold";
+      } else if (font === "mathbb") {
+        return "double-struck";
+      } else if (font === "mathfrak") {
+        return "fraktur";
+      } else if (font === "mathscr" || font === "mathcal") {
+        // MathML makes no distinction between script and caligrahpic
+        return "script";
+      } else if (font === "mathsf") {
+        return "sans-serif";
+      } else if (font === "mathtt") {
+        return "monospace";
       }
 
       var text = group.text;
@@ -68478,42 +68887,55 @@ var app = (function () {
      * <mtext> tag.
      */
 
-    var buildMathML_buildExpression = function buildExpression(expression, options) {
+    var buildMathML_buildExpression = function buildExpression(expression, options, isOrdgroup) {
+      if (expression.length === 1) {
+        var group = buildMathML_buildGroup(expression[0], options);
+
+        if (isOrdgroup && group instanceof mathMLTree_MathNode && group.type === "mo") {
+          // When TeX writers want to suppress spacing on an operator,
+          // they often put the operator by itself inside braces.
+          group.setAttribute("lspace", "0em");
+          group.setAttribute("rspace", "0em");
+        }
+
+        return [group];
+      }
+
       var groups = [];
       var lastGroup;
 
       for (var i = 0; i < expression.length; i++) {
-        var group = buildMathML_buildGroup(expression[i], options);
+        var _group = buildMathML_buildGroup(expression[i], options);
 
-        if (group instanceof mathMLTree_MathNode && lastGroup instanceof mathMLTree_MathNode) {
+        if (_group instanceof mathMLTree_MathNode && lastGroup instanceof mathMLTree_MathNode) {
           // Concatenate adjacent <mtext>s
-          if (group.type === 'mtext' && lastGroup.type === 'mtext' && group.getAttribute('mathvariant') === lastGroup.getAttribute('mathvariant')) {
+          if (_group.type === 'mtext' && lastGroup.type === 'mtext' && _group.getAttribute('mathvariant') === lastGroup.getAttribute('mathvariant')) {
             var _lastGroup$children;
 
-            (_lastGroup$children = lastGroup.children).push.apply(_lastGroup$children, group.children);
+            (_lastGroup$children = lastGroup.children).push.apply(_lastGroup$children, _group.children);
 
             continue; // Concatenate adjacent <mn>s
-          } else if (group.type === 'mn' && lastGroup.type === 'mn') {
+          } else if (_group.type === 'mn' && lastGroup.type === 'mn') {
             var _lastGroup$children2;
 
-            (_lastGroup$children2 = lastGroup.children).push.apply(_lastGroup$children2, group.children);
+            (_lastGroup$children2 = lastGroup.children).push.apply(_lastGroup$children2, _group.children);
 
             continue; // Concatenate <mn>...</mn> followed by <mi>.</mi>
-          } else if (group.type === 'mi' && group.children.length === 1 && lastGroup.type === 'mn') {
-            var child = group.children[0];
+          } else if (_group.type === 'mi' && _group.children.length === 1 && lastGroup.type === 'mn') {
+            var child = _group.children[0];
 
             if (child instanceof mathMLTree_TextNode && child.text === '.') {
               var _lastGroup$children3;
 
-              (_lastGroup$children3 = lastGroup.children).push.apply(_lastGroup$children3, group.children);
+              (_lastGroup$children3 = lastGroup.children).push.apply(_lastGroup$children3, _group.children);
 
               continue;
             }
           } else if (lastGroup.type === 'mi' && lastGroup.children.length === 1) {
             var lastChild = lastGroup.children[0];
 
-            if (lastChild instanceof mathMLTree_TextNode && lastChild.text === "\u0338" && (group.type === 'mo' || group.type === 'mi' || group.type === 'mn')) {
-              var _child = group.children[0];
+            if (lastChild instanceof mathMLTree_TextNode && lastChild.text === "\u0338" && (_group.type === 'mo' || _group.type === 'mi' || _group.type === 'mn')) {
+              var _child = _group.children[0];
 
               if (_child instanceof mathMLTree_TextNode && _child.text.length > 0) {
                 // Overlay with combining character long solidus
@@ -68524,8 +68946,8 @@ var app = (function () {
           }
         }
 
-        groups.push(group);
-        lastGroup = group;
+        groups.push(_group);
+        lastGroup = _group;
       }
 
       return groups;
@@ -68535,8 +68957,8 @@ var app = (function () {
      * if there's more than one.  Returns a single node instead of an array.
      */
 
-    var buildExpressionRow = function buildExpressionRow(expression, options) {
-      return buildMathML_makeRow(buildMathML_buildExpression(expression, options));
+    var buildExpressionRow = function buildExpressionRow(expression, options, isOrdgroup) {
+      return buildMathML_makeRow(buildMathML_buildExpression(expression, options, isOrdgroup));
     };
     /**
      * Takes a group from the parser and calls the appropriate groupBuilders function
@@ -68565,7 +68987,7 @@ var app = (function () {
      * we can do appropriate styling.
      */
 
-    function buildMathML(tree, texExpression, options) {
+    function buildMathML(tree, texExpression, options, forMathmlOnly) {
       var expression = buildMathML_buildExpression(tree, options); // Wrap up the expression in an mrow so it is presented in the semantics
       // tag correctly, unless it's a single <mrow> or <mtable>.
 
@@ -68581,13 +69003,15 @@ var app = (function () {
       var annotation = new mathMLTree.MathNode("annotation", [new mathMLTree.TextNode(texExpression)]);
       annotation.setAttribute("encoding", "application/x-tex");
       var semantics = new mathMLTree.MathNode("semantics", [wrapper, annotation]);
-      var math = new mathMLTree.MathNode("math", [semantics]); // You can't style <math> nodes, so we wrap the node in a span.
+      var math = new mathMLTree.MathNode("math", [semantics]);
+      math.setAttribute("xmlns", "http://www.w3.org/1998/Math/MathML"); // You can't style <math> nodes, so we wrap the node in a span.
       // NOTE: The span class is not typed to have <math> nodes as children, and
       // we don't want to make the children type more generic since the children
       // of span are expected to have more fields in `buildHtml` contexts.
-      // $FlowFixMe
 
-      return buildCommon.makeSpan(["katex-mathml"], [math]);
+      var wrapperClass = forMathmlOnly ? "katex" : "katex-mathml"; // $FlowFixMe
+
+      return buildCommon.makeSpan([wrapperClass], [math]);
     }
     // CONCATENATED MODULE: ./src/buildTree.js
 
@@ -68600,7 +69024,8 @@ var app = (function () {
     var buildTree_optionsFromSettings = function optionsFromSettings(settings) {
       return new src_Options({
         style: settings.displayMode ? src_Style.DISPLAY : src_Style.TEXT,
-        maxSize: settings.maxSize
+        maxSize: settings.maxSize,
+        minRuleThickness: settings.minRuleThickness
       });
     };
 
@@ -68624,9 +69049,21 @@ var app = (function () {
 
     var buildTree_buildTree = function buildTree(tree, expression, settings) {
       var options = buildTree_optionsFromSettings(settings);
-      var mathMLNode = buildMathML(tree, expression, options);
-      var htmlNode = buildHTML(tree, options);
-      var katexNode = buildCommon.makeSpan(["katex"], [mathMLNode, htmlNode]);
+      var katexNode;
+
+      if (settings.output === "mathml") {
+        return buildMathML(tree, expression, options, true);
+      } else if (settings.output === "html") {
+        var htmlNode = buildHTML(tree, options);
+        katexNode = buildCommon.makeSpan(["katex"], [htmlNode]);
+      } else {
+        var mathMLNode = buildMathML(tree, expression, options, false);
+
+        var _htmlNode = buildHTML(tree, options);
+
+        katexNode = buildCommon.makeSpan(["katex"], [mathMLNode, _htmlNode]);
+      }
+
       return buildTree_displayWrap(katexNode, settings);
     };
     var buildTree_buildHTMLTree = function buildHTMLTree(tree, expression, settings) {
@@ -69063,7 +69500,11 @@ var app = (function () {
           accent = buildCommon.staticSvg("vec", options);
           width = buildCommon.svgData.vec[1];
         } else {
-          accent = buildCommon.makeSymbol(group.label, "Main-Regular", group.mode, options); // Remove the italic correction of the accent, because it only serves to
+          accent = buildCommon.makeOrd({
+            mode: group.mode,
+            text: group.label
+          }, options, "textord");
+          accent = assertSymbolDomNode(accent); // Remove the italic correction of the accent, because it only serves to
           // shift the accent over to a place we don't want.
 
           accent.italic = 0;
@@ -69490,7 +69931,12 @@ var app = (function () {
       handler: function handler(_ref2, args) {
         var parser = _ref2.parser,
             breakOnTokenText = _ref2.breakOnTokenText;
-        var color = assertNodeType(args[0], "color-token").color; // If we see a styling function, parse out the implicit body
+        var color = assertNodeType(args[0], "color-token").color; // Set macro \current@color in current namespace to store the current
+        // color, mimicking the behavior of color.sty.
+        // This is currently used just to correctly color a \right
+        // that follows a \color command.
+
+        parser.gullet.macros.set("\\current@color", color); // Parse out the implicit body that should be colored.
 
         var body = parser.parseExpression(true, breakOnTokenText);
         return {
@@ -69610,6 +70056,7 @@ var app = (function () {
 
 
 
+
     /**
      * Get the metrics for a given symbol and font, after transformation (i.e.
      * after following replacement from symbols.js)
@@ -69713,12 +70160,17 @@ var app = (function () {
         type: "elem",
         elem: inner
       };
+    }; // Helper for makeStackedDelim
+
+
+    var lap = {
+      type: "kern",
+      size: -0.005
     };
     /**
      * Make a stacked delimiter out of a given delimiter, with the total height at
      * least `heightTotal`. This routine is mentioned on page 442 of the TeXbook.
      */
-
 
     var delimiter_makeStackedDelim = function makeStackedDelim(delim, heightTotal, center, options, mode, classes) {
       // There are four parts, the top, an optional middle, a repeated part, and a
@@ -69840,7 +70292,7 @@ var app = (function () {
 
       var minHeight = topHeightTotal + bottomHeightTotal + middleHeightTotal; // Compute the number of copies of the repeat symbol we will need
 
-      var repeatCount = Math.ceil((heightTotal - minHeight) / (middleFactor * repeatHeightTotal)); // Compute the total height of the delimiter including all the symbols
+      var repeatCount = Math.max(0, Math.ceil((heightTotal - minHeight) / (middleFactor * repeatHeightTotal))); // Compute the total height of the delimiter including all the symbols
 
       var realHeightTotal = minHeight + repeatCount * middleFactor * repeatHeightTotal; // The center of the delimiter is placed at the center of the axis. Note
       // that in this context, "center" means that the delimiter should be
@@ -69854,7 +70306,15 @@ var app = (function () {
       } // Calculate the depth
 
 
-      var depth = realHeightTotal / 2 - axisHeight; // Now, we start building the pieces that will go into the vlist
+      var depth = realHeightTotal / 2 - axisHeight; // This function differs from the TeX procedure in one way.
+      // We shift each repeat element downwards by 0.005em, to prevent a gap
+      // due to browser floating point rounding error.
+      // Then, at the last element-to element joint, we add one extra repeat
+      // element to cover the gap created by the shifts.
+      // Find the shift needed to align the upper end of the extra element at a point
+      // 0.005em above the lower end of the top element.
+
+      var shiftOfExtraElement = (repeatCount + 1) * 0.005 - repeatHeightTotal; // Now, we start building the pieces that will go into the vlist
       // Keep a list of the inner pieces
 
       var inners = []; // Add the bottom symbol
@@ -69864,22 +70324,42 @@ var app = (function () {
       if (middle === null) {
         // Add that many symbols
         for (var i = 0; i < repeatCount; i++) {
+          inners.push(lap); // overlap
+
           inners.push(delimiter_makeInner(repeat, font, mode));
         }
       } else {
         // When there is a middle bit, we need the middle part and two repeated
         // sections
         for (var _i = 0; _i < repeatCount; _i++) {
+          inners.push(lap);
           inners.push(delimiter_makeInner(repeat, font, mode));
-        }
+        } // Insert one extra repeat element.
+
+
+        inners.push({
+          type: "kern",
+          size: shiftOfExtraElement
+        });
+        inners.push(delimiter_makeInner(repeat, font, mode));
+        inners.push(lap); // Now insert the middle of the brace.
 
         inners.push(delimiter_makeInner(middle, font, mode));
 
         for (var _i2 = 0; _i2 < repeatCount; _i2++) {
+          inners.push(lap);
           inners.push(delimiter_makeInner(repeat, font, mode));
         }
-      } // Add the top symbol
+      } // To cover the gap create by the overlaps, insert one more repeat element,
+      // at a position that juts 0.005 above the bottom of the top element.
 
+
+      inners.push({
+        type: "kern",
+        size: shiftOfExtraElement
+      });
+      inners.push(delimiter_makeInner(repeat, font, mode));
+      inners.push(lap); // Add the top symbol
 
       inners.push(delimiter_makeInner(top, font, mode)); // Finally, build the vlist
 
@@ -69898,19 +70378,9 @@ var app = (function () {
 
     var emPad = 0.08; // padding, in ems, measured in the document.
 
-    var delimiter_sqrtSvg = function sqrtSvg(sqrtName, height, viewBoxHeight, options) {
-      var alternate;
-
-      if (sqrtName === "sqrtTall") {
-        // sqrtTall is from glyph U23B7 in the font KaTeX_Size4-Regular
-        // One path edge has a variable length. It runs from the viniculumn
-        // to a point near (14 units) the bottom of the surd. The viniculum
-        // is 40 units thick. So the length of the line in question is:
-        var vertSegment = viewBoxHeight - 54 - vbPad;
-        alternate = "M702 " + vbPad + "H400000v40H742v" + vertSegment + "l-4 4-4 4c-.667.7\n-2 1.5-4 2.5s-4.167 1.833-6.5 2.5-5.5 1-9.5 1h-12l-28-84c-16.667-52-96.667\n-294.333-240-727l-212 -643 -85 170c-4-3.333-8.333-7.667-13 -13l-13-13l77-155\n 77-156c66 199.333 139 419.667 219 661 l218 661zM702 " + vbPad + "H400000v40H742z";
-      }
-
-      var pathNode = new domTree_PathNode(sqrtName, alternate);
+    var delimiter_sqrtSvg = function sqrtSvg(sqrtName, height, viewBoxHeight, extraViniculum, options) {
+      var path = sqrtPath(sqrtName, extraViniculum, viewBoxHeight);
+      var pathNode = new domTree_PathNode(sqrtName, path);
       var svg = new SvgNode([pathNode], {
         // Note: 1000:1 ratio of viewBox to document em width.
         "width": "400em",
@@ -69932,7 +70402,10 @@ var app = (function () {
 
       var delim = traverseSequence("\\surd", height * newOptions.sizeMultiplier, stackLargeDelimiterSequence, newOptions);
       var sizeMultiplier = newOptions.sizeMultiplier; // default
-      // Create a span containing an SVG image of a sqrt symbol.
+      // The standard sqrt SVGs each have a 0.04em thick viniculum.
+      // If Settings.minRuleThickness is larger than that, we add extraViniculum.
+
+      var extraViniculum = Math.max(0, options.minRuleThickness - options.fontMetrics().sqrtRuleThickness); // Create a span containing an SVG image of a sqrt symbol.
 
       var span;
       var spanHeight = 0;
@@ -69946,7 +70419,8 @@ var app = (function () {
 
       if (delim.type === "small") {
         // Get an SVG that is derived from glyph U+221A in font KaTeX-Main.
-        viewBoxHeight = 1000 + vbPad; // 1000 unit glyph height.
+        // 1000 unit normal glyph height.
+        viewBoxHeight = 1000 + 1000 * extraViniculum + vbPad;
 
         if (height < 1.0) {
           sizeMultiplier = 1.0; // mimic a \textfont radical
@@ -69954,26 +70428,26 @@ var app = (function () {
           sizeMultiplier = 0.7; // mimic a \scriptfont radical
         }
 
-        spanHeight = (1.0 + emPad) / sizeMultiplier;
-        texHeight = 1.00 / sizeMultiplier;
-        span = delimiter_sqrtSvg("sqrtMain", spanHeight, viewBoxHeight, options);
+        spanHeight = (1.0 + extraViniculum + emPad) / sizeMultiplier;
+        texHeight = (1.00 + extraViniculum) / sizeMultiplier;
+        span = delimiter_sqrtSvg("sqrtMain", spanHeight, viewBoxHeight, extraViniculum, options);
         span.style.minWidth = "0.853em";
         advanceWidth = 0.833 / sizeMultiplier; // from the font.
       } else if (delim.type === "large") {
         // These SVGs come from fonts: KaTeX_Size1, _Size2, etc.
         viewBoxHeight = (1000 + vbPad) * sizeToMaxHeight[delim.size];
-        texHeight = sizeToMaxHeight[delim.size] / sizeMultiplier;
-        spanHeight = (sizeToMaxHeight[delim.size] + emPad) / sizeMultiplier;
-        span = delimiter_sqrtSvg("sqrtSize" + delim.size, spanHeight, viewBoxHeight, options);
+        texHeight = (sizeToMaxHeight[delim.size] + extraViniculum) / sizeMultiplier;
+        spanHeight = (sizeToMaxHeight[delim.size] + extraViniculum + emPad) / sizeMultiplier;
+        span = delimiter_sqrtSvg("sqrtSize" + delim.size, spanHeight, viewBoxHeight, extraViniculum, options);
         span.style.minWidth = "1.02em";
         advanceWidth = 1.0 / sizeMultiplier; // 1.0 from the font.
       } else {
         // Tall sqrt. In TeX, this would be stacked using multiple glyphs.
         // We'll use a single SVG to accomplish the same thing.
-        spanHeight = height + emPad;
-        texHeight = height;
-        viewBoxHeight = Math.floor(1000 * height) + vbPad;
-        span = delimiter_sqrtSvg("sqrtTall", spanHeight, viewBoxHeight, options);
+        spanHeight = height + extraViniculum + emPad;
+        texHeight = height + extraViniculum;
+        viewBoxHeight = Math.floor(1000 * height + extraViniculum) + vbPad;
+        span = delimiter_sqrtSvg("sqrtTall", spanHeight, viewBoxHeight, extraViniculum, options);
         span.style.minWidth = "0.742em";
         advanceWidth = 1.056;
       }
@@ -69987,7 +70461,7 @@ var app = (function () {
         // This actually should depend on the chosen font -- e.g. \boldmath
         // should use the thicker surd symbols from e.g. KaTeX_Main-Bold, and
         // have thicker rules.
-        ruleWidth: options.fontMetrics().sqrtRuleThickness * sizeMultiplier
+        ruleWidth: (options.fontMetrics().sqrtRuleThickness + extraViniculum) * sizeMultiplier
       };
     }; // There are three kinds of delimiters, delimiters that stack when they become
     // too large
@@ -70379,10 +70853,18 @@ var app = (function () {
         // \left case below triggers parsing of \right in
         //   `const right = parser.parseFunction();`
         // uses this return value.
+        var color = context.parser.gullet.macros.get("\\current@color");
+
+        if (color && typeof color !== "string") {
+          throw new src_ParseError("\\current@color set to non-string in \\right");
+        }
+
         return {
           type: "leftright-right",
           mode: context.parser.mode,
-          delim: checkDelimiter(args[0], context).text
+          delim: checkDelimiter(args[0], context).text,
+          color: color // undefined if not set via \color
+
         };
       }
     });
@@ -70408,7 +70890,8 @@ var app = (function () {
           mode: parser.mode,
           body: body,
           left: delim.text,
-          right: right.delim
+          right: right.delim,
+          rightColor: right.color
         };
       },
       htmlBuilder: function htmlBuilder(group, options) {
@@ -70465,12 +70948,13 @@ var app = (function () {
           }
         }
 
-        var rightDelim; // Same for the right delimiter
+        var rightDelim; // Same for the right delimiter, but using color specified by \color
 
         if (group.right === ".") {
           rightDelim = makeNullDelimiter(options, ["mclose"]);
         } else {
-          rightDelim = delimiter.leftRightDelim(group.right, innerHeight, innerDepth, options, group.mode, ["mclose"]);
+          var colorOptions = group.rightColor ? options.withColor(group.rightColor) : options;
+          rightDelim = delimiter.leftRightDelim(group.right, innerHeight, innerDepth, colorOptions, group.mode, ["mclose"]);
         } // Add it to the end of the expression.
 
 
@@ -70490,6 +70974,11 @@ var app = (function () {
         if (group.right !== ".") {
           var rightNode = new mathMLTree.MathNode("mo", [buildMathML_makeText(group.right, group.mode)]);
           rightNode.setAttribute("fence", "true");
+
+          if (group.rightColor) {
+            rightNode.setAttribute("mathcolor", group.rightColor);
+          }
+
           inner.push(rightNode);
         }
 
@@ -70592,16 +71081,25 @@ var app = (function () {
         } // Add vertical padding
 
 
-        var vertPad = 0; // ref: LaTeX source2e: \fboxsep = 3pt;  \fboxrule = .4pt
-        // ref: cancel package: \advance\totalheight2\p@ % "+2"
+        var vertPad = 0;
+        var ruleThickness = 0; // ref: cancel package: \advance\totalheight2\p@ % "+2"
 
         if (/box/.test(label)) {
-          vertPad = label === "colorbox" ? 0.3 : 0.34;
+          ruleThickness = Math.max(options.fontMetrics().fboxrule, // default
+          options.minRuleThickness // User override.
+          );
+          vertPad = options.fontMetrics().fboxsep + (label === "colorbox" ? 0 : ruleThickness);
         } else {
           vertPad = isSingleChar ? 0.2 : 0;
         }
 
         img = stretchy.encloseSpan(inner, label, vertPad, options);
+
+        if (/fbox|boxed|fcolorbox/.test(label)) {
+          img.style.borderStyle = "solid";
+          img.style.borderWidth = ruleThickness + "em";
+        }
+
         imgShift = inner.depth + vertPad;
 
         if (group.backgroundColor) {
@@ -70662,6 +71160,7 @@ var app = (function () {
     };
 
     var enclose_mathmlBuilder = function mathmlBuilder(group, options) {
+      var fboxsep = 0;
       var node = new mathMLTree.MathNode(group.label.indexOf("colorbox") > -1 ? "mpadded" : "menclose", [buildMathML_buildGroup(group.body, options)]);
 
       switch (group.label) {
@@ -70685,14 +71184,17 @@ var app = (function () {
         case "\\colorbox":
           // <menclose> doesn't have a good notation option. So use <mpadded>
           // instead. Set some attributes that come included with <menclose>.
-          node.setAttribute("width", "+6pt");
-          node.setAttribute("height", "+6pt");
-          node.setAttribute("lspace", "3pt"); // LaTeX source2e: \fboxsep = 3pt
+          fboxsep = options.fontMetrics().fboxsep * options.fontMetrics().ptPerEm;
+          node.setAttribute("width", "+" + 2 * fboxsep + "pt");
+          node.setAttribute("height", "+" + 2 * fboxsep + "pt");
+          node.setAttribute("lspace", fboxsep + "pt"); //
 
-          node.setAttribute("voffset", "3pt");
+          node.setAttribute("voffset", fboxsep + "pt");
 
           if (group.label === "\\fcolorbox") {
-            var thk = options.fontMetrics().defaultRuleThickness;
+            var thk = Math.max(options.fontMetrics().fboxrule, // default
+            options.minRuleThickness // user override
+            );
             node.setAttribute("style", "border: " + thk + "em solid " + String(group.borderColor));
           }
 
@@ -70767,7 +71269,7 @@ var app = (function () {
       names: ["\\fbox"],
       props: {
         numArgs: 1,
-        argTypes: ["text"],
+        argTypes: ["hbox"],
         allowedInText: true
       },
       handler: function handler(_ref3, args) {
@@ -70855,18 +71357,19 @@ var app = (function () {
 
 
 
+
     function getHLines(parser) {
       // Return an array. The array length = number of hlines.
       // Each element in the array tells if the line is dashed.
       var hlineInfo = [];
       parser.consumeSpaces();
-      var nxt = parser.nextToken.text;
+      var nxt = parser.fetch().text;
 
       while (nxt === "\\hline" || nxt === "\\hdashline") {
         parser.consume();
         hlineInfo.push(nxt === "\\hdashline");
         parser.consumeSpaces();
-        nxt = parser.nextToken.text;
+        nxt = parser.fetch().text;
       }
 
       return hlineInfo;
@@ -70902,8 +71405,10 @@ var app = (function () {
             throw new src_ParseError("Invalid \\arraystretch: " + stretch);
           }
         }
-      }
+      } // Start group for first cell
 
+
+      parser.gullet.beginGroup();
       var row = [];
       var body = [row];
       var rowGaps = [];
@@ -70913,7 +71418,10 @@ var app = (function () {
 
       while (true) {
         // eslint-disable-line no-constant-condition
+        // Parse each cell in its own group (namespace)
         var cell = parser.parseExpression(false, "\\cr");
+        parser.gullet.endGroup();
+        parser.gullet.beginGroup();
         cell = {
           type: "ordgroup",
           mode: parser.mode,
@@ -70930,7 +71438,7 @@ var app = (function () {
         }
 
         row.push(cell);
-        var next = parser.nextToken.text;
+        var next = parser.fetch().text;
 
         if (next === "&") {
           parser.consume();
@@ -70957,7 +71465,10 @@ var app = (function () {
         } else {
           throw new src_ParseError("Expected & or \\\\ or \\cr or \\end", parser.nextToken);
         }
-      }
+      } // End cell group
+
+
+      parser.gullet.endGroup(); // End array group defining \\
 
       parser.gullet.endGroup();
       return {
@@ -70991,11 +71502,24 @@ var app = (function () {
       var hLinesBeforeRow = group.hLinesBeforeRow;
       var nc = 0;
       var body = new Array(nr);
-      var hlines = []; // Horizontal spacing
+      var hlines = [];
+      var ruleThickness = Math.max( // From LaTeX \showthe\arrayrulewidth. Equals 0.04 em.
+      options.fontMetrics().arrayRuleWidth, options.minRuleThickness // User override.
+      ); // Horizontal spacing
 
       var pt = 1 / options.fontMetrics().ptPerEm;
-      var arraycolsep = 5 * pt; // \arraycolsep in article.cls
-      // Vertical spacing
+      var arraycolsep = 5 * pt; // default value, i.e. \arraycolsep in article.cls
+
+      if (group.colSeparationType && group.colSeparationType === "small") {
+        // We're in a {smallmatrix}. Default column space is \thickspace,
+        // i.e. 5/18em = 0.2778em, per amsmath.dtx for {smallmatrix}.
+        // But that needs adjustment because LaTeX applies \scriptstyle to the
+        // entire array, including the colspace, but this function applies
+        // \scriptstyle only inside each element.
+        var localMultiplier = options.havingStyle(src_Style.SCRIPT).sizeMultiplier;
+        arraycolsep = 0.2778 * (localMultiplier / options.sizeMultiplier);
+      } // Vertical spacing
+
 
       var baselineskip = 12 * pt; // see size10.clo
       // Default \jot from ltmath.dtx
@@ -71107,17 +71631,15 @@ var app = (function () {
             cols.push(colSep);
           }
 
-          if (colDescr.separator === "|") {
+          if (colDescr.separator === "|" || colDescr.separator === ":") {
+            var lineType = colDescr.separator === "|" ? "solid" : "dashed";
             var separator = buildCommon.makeSpan(["vertical-separator"], [], options);
             separator.style.height = totalHeight + "em";
+            separator.style.borderRightWidth = ruleThickness + "em";
+            separator.style.borderRightStyle = lineType;
+            separator.style.margin = "0 -" + ruleThickness / 2 + "em";
             separator.style.verticalAlign = -(totalHeight - offset) + "em";
             cols.push(separator);
-          } else if (colDescr.separator === ":") {
-            var _separator = buildCommon.makeSpan(["vertical-separator", "vs-dashed"], [], options);
-
-            _separator.style.height = totalHeight + "em";
-            _separator.style.verticalAlign = -(totalHeight - offset) + "em";
-            cols.push(_separator);
           } else {
             throw new src_ParseError("Invalid separator type: " + colDescr.separator);
           }
@@ -71184,8 +71706,8 @@ var app = (function () {
       body = buildCommon.makeSpan(["mtable"], cols); // Add \hline(s), if any.
 
       if (hlines.length > 0) {
-        var line = buildCommon.makeLineSpan("hline", options, 0.05);
-        var dashes = buildCommon.makeLineSpan("hdashline", options, 0.05);
+        var line = buildCommon.makeLineSpan("hline", options, ruleThickness);
+        var dashes = buildCommon.makeLineSpan("hdashline", options, ruleThickness);
         var vListElems = [{
           type: "elem",
           elem: body,
@@ -71242,7 +71764,8 @@ var app = (function () {
       // The 0.16 and 0.09 values are found emprically. They produce an array
       // similar to LaTeX and in which content does not interfere with \hines.
 
-      var gap = 0.16 + group.arraystretch - 1 + (group.addJot ? 0.09 : 0);
+      var gap = group.arraystretch === 0.5 ? 0.1 // {smallmatrix}, {subarray}
+      : 0.16 + group.arraystretch - 1 + (group.addJot ? 0.09 : 0);
       table.setAttribute("rowspacing", gap + "em"); // MathML table lines go only between cells.
       // To place a line on an edge we'll use <menclose>, if necessary.
 
@@ -71306,6 +71829,8 @@ var app = (function () {
         table.setAttribute("columnspacing", spacing.trim());
       } else if (group.colSeparationType === "alignat") {
         table.setAttribute("columnspacing", "0em");
+      } else if (group.colSeparationType === "small") {
+        table.setAttribute("columnspacing", "0.2778em");
       } else {
         table.setAttribute("columnspacing", "1em");
       } // Address \hline and \hdashline
@@ -71325,13 +71850,18 @@ var app = (function () {
         table.setAttribute("rowlines", rowLines.trim());
       }
 
-      if (menclose === "") {
-        return table;
-      } else {
-        var wrapper = new mathMLTree.MathNode("menclose", [table]);
-        wrapper.setAttribute("notation", menclose.trim());
-        return wrapper;
+      if (menclose !== "") {
+        table = new mathMLTree.MathNode("menclose", [table]);
+        table.setAttribute("notation", menclose.trim());
       }
+
+      if (group.arraystretch && group.arraystretch < 1) {
+        // A small array. Wrap in scriptstyle so row gap is not too large.
+        table = new mathMLTree.MathNode("mstyle", [table]);
+        table.setAttribute("scriptlevel", "1");
+      }
+
+      return table;
     }; // Convenience function for aligned and alignedat environments.
 
 
@@ -71497,8 +72027,71 @@ var app = (function () {
           mode: context.mode,
           body: [res],
           left: delimiters[0],
-          right: delimiters[1]
+          right: delimiters[1],
+          rightColor: undefined // \right uninfluenced by \color in array
+
         } : res;
+      },
+      htmlBuilder: array_htmlBuilder,
+      mathmlBuilder: array_mathmlBuilder
+    });
+    defineEnvironment({
+      type: "array",
+      names: ["smallmatrix"],
+      props: {
+        numArgs: 0
+      },
+      handler: function handler(context) {
+        var payload = {
+          arraystretch: 0.5
+        };
+        var res = parseArray(context.parser, payload, "script");
+        res.colSeparationType = "small";
+        return res;
+      },
+      htmlBuilder: array_htmlBuilder,
+      mathmlBuilder: array_mathmlBuilder
+    });
+    defineEnvironment({
+      type: "array",
+      names: ["subarray"],
+      props: {
+        numArgs: 1
+      },
+      handler: function handler(context, args) {
+        // Parsing of {subarray} is similar to {array}
+        var symNode = checkSymbolNodeType(args[0]);
+        var colalign = symNode ? [args[0]] : assertNodeType(args[0], "ordgroup").body;
+        var cols = colalign.map(function (nde) {
+          var node = assertSymbolNodeType(nde);
+          var ca = node.text; // {subarray} only recognizes "l" & "c"
+
+          if ("lc".indexOf(ca) !== -1) {
+            return {
+              type: "align",
+              align: ca
+            };
+          }
+
+          throw new src_ParseError("Unknown column alignment: " + ca, nde);
+        });
+
+        if (cols.length > 1) {
+          throw new src_ParseError("{subarray} can contain only one column");
+        }
+
+        var res = {
+          cols: cols,
+          hskipBeforeAndAfter: false,
+          arraystretch: 0.5
+        };
+        res = parseArray(context.parser, res, "script");
+
+        if (res.body[0].length > 1) {
+          throw new src_ParseError("{subarray} can contain only one column");
+        }
+
+        return res;
       },
       htmlBuilder: array_htmlBuilder,
       mathmlBuilder: array_mathmlBuilder
@@ -71541,7 +72134,8 @@ var app = (function () {
           mode: context.mode,
           body: [res],
           left: "\\{",
-          right: "."
+          right: ".",
+          rightColor: undefined
         };
       },
       htmlBuilder: array_htmlBuilder,
@@ -71694,6 +72288,7 @@ var app = (function () {
 
 
 
+
     var mclass_makeSpan = buildCommon.makeSpan;
 
     function mclass_htmlBuilder(group, options) {
@@ -71702,8 +72297,44 @@ var app = (function () {
     }
 
     function mclass_mathmlBuilder(group, options) {
+      var node;
       var inner = buildMathML_buildExpression(group.body, options);
-      return mathMLTree.newDocumentFragment(inner);
+
+      if (group.mclass === "minner") {
+        return mathMLTree.newDocumentFragment(inner);
+      } else if (group.mclass === "mord") {
+        if (group.isCharacterBox) {
+          node = inner[0];
+          node.type = "mi";
+        } else {
+          node = new mathMLTree.MathNode("mi", inner);
+        }
+      } else {
+        if (group.isCharacterBox) {
+          node = inner[0];
+          node.type = "mo";
+        } else {
+          node = new mathMLTree.MathNode("mo", inner);
+        } // Set spacing based on what is the most likely adjacent atom type.
+        // See TeXbook p170.
+
+
+        if (group.mclass === "mbin") {
+          node.attributes.lspace = "0.22em"; // medium space
+
+          node.attributes.rspace = "0.22em";
+        } else if (group.mclass === "mpunct") {
+          node.attributes.lspace = "0em";
+          node.attributes.rspace = "0.17em"; // thinspace
+        } else if (group.mclass === "mopen" || group.mclass === "mclose") {
+          node.attributes.lspace = "0em";
+          node.attributes.rspace = "0em";
+        } // MathML <mo> default space is 5/18 em, so <mrel> needs no action.
+        // Ref: https://developer.mozilla.org/en-US/docs/Web/MathML/Element/mo
+
+      }
+
+      return node;
     } // Math class commands except \mathop
 
 
@@ -71721,7 +72352,9 @@ var app = (function () {
           type: "mclass",
           mode: parser.mode,
           mclass: "m" + funcName.substr(5),
-          body: defineFunction_ordargument(body)
+          // TODO(kevinb): don't prefix with 'm'
+          body: defineFunction_ordargument(body),
+          isCharacterBox: utils.isCharacterBox(body)
         };
       },
       htmlBuilder: mclass_htmlBuilder,
@@ -71754,7 +72387,8 @@ var app = (function () {
           type: "mclass",
           mode: parser.mode,
           mclass: binrelClass(args[0]),
-          body: [args[1]]
+          body: [args[1]],
+          isCharacterBox: utils.isCharacterBox(args[1])
         };
       }
     }); // Build a relation or stacked op by placing one symbol on top of another
@@ -71800,7 +72434,8 @@ var app = (function () {
           type: "mclass",
           mode: parser.mode,
           mclass: mclass,
-          body: [supsub]
+          body: [supsub],
+          isCharacterBox: utils.isCharacterBox(supsub)
         };
       },
       htmlBuilder: mclass_htmlBuilder,
@@ -71808,6 +72443,7 @@ var app = (function () {
     });
     // CONCATENATED MODULE: ./src/functions/font.js
     // TODO(kevinb): implement \\sl and \\sc
+
 
 
 
@@ -71870,7 +72506,8 @@ var app = (function () {
       },
       handler: function handler(_ref2, args) {
         var parser = _ref2.parser;
-        var body = args[0]; // amsbsy.sty's \boldsymbol uses \binrel spacing to inherit the
+        var body = args[0];
+        var isCharacterBox = utils.isCharacterBox(body); // amsbsy.sty's \boldsymbol uses \binrel spacing to inherit the
         // argument's bin|rel|ord status
 
         return {
@@ -71882,7 +72519,8 @@ var app = (function () {
             mode: parser.mode,
             font: "boldsymbol",
             body: body
-          }]
+          }],
+          isCharacterBox: isCharacterBox
         };
       }
     }); // Old font changing functions
@@ -72572,6 +73210,14 @@ var app = (function () {
         var parser = _ref.parser;
         var body = args[1];
         var href = assertNodeType(args[0], "url").url;
+
+        if (!parser.settings.isTrusted({
+          command: "\\href",
+          url: href
+        })) {
+          return parser.formatUnsupportedCmd("\\href");
+        }
+
         return {
           type: "href",
           mode: parser.mode,
@@ -72605,6 +73251,14 @@ var app = (function () {
       handler: function handler(_ref2, args) {
         var parser = _ref2.parser;
         var href = assertNodeType(args[0], "url").url;
+
+        if (!parser.settings.isTrusted({
+          command: "\\url",
+          url: href
+        })) {
+          return parser.formatUnsupportedCmd("\\url");
+        }
+
         var chars = [];
 
         for (var i = 0; i < href.length; i++) {
@@ -72662,6 +73316,185 @@ var app = (function () {
       },
       mathmlBuilder: function mathmlBuilder(group, options) {
         return buildExpressionRow(group.mathml, options);
+      }
+    });
+    // CONCATENATED MODULE: ./src/functions/includegraphics.js
+
+
+
+
+
+
+
+    var includegraphics_sizeData = function sizeData(str) {
+      if (/^[-+]? *(\d+(\.\d*)?|\.\d+)$/.test(str)) {
+        // str is a number with no unit specified.
+        // default unit is bp, per graphix package.
+        return {
+          number: +str,
+          unit: "bp"
+        };
+      } else {
+        var match = /([-+]?) *(\d+(?:\.\d*)?|\.\d+) *([a-z]{2})/.exec(str);
+
+        if (!match) {
+          throw new src_ParseError("Invalid size: '" + str + "' in \\includegraphics");
+        }
+
+        var data = {
+          number: +(match[1] + match[2]),
+          // sign + magnitude, cast to number
+          unit: match[3]
+        };
+
+        if (!validUnit(data)) {
+          throw new src_ParseError("Invalid unit: '" + data.unit + "' in \\includegraphics.");
+        }
+
+        return data;
+      }
+    };
+
+    defineFunction({
+      type: "includegraphics",
+      names: ["\\includegraphics"],
+      props: {
+        numArgs: 1,
+        numOptionalArgs: 1,
+        argTypes: ["raw", "url"],
+        allowedInText: false
+      },
+      handler: function handler(_ref, args, optArgs) {
+        var parser = _ref.parser;
+        var width = {
+          number: 0,
+          unit: "em"
+        };
+        var height = {
+          number: 0.9,
+          unit: "em"
+        }; // sorta character sized.
+
+        var totalheight = {
+          number: 0,
+          unit: "em"
+        };
+        var alt = "";
+
+        if (optArgs[0]) {
+          var attributeStr = assertNodeType(optArgs[0], "raw").string; // Parser.js does not parse key/value pairs. We get a string.
+
+          var attributes = attributeStr.split(",");
+
+          for (var i = 0; i < attributes.length; i++) {
+            var keyVal = attributes[i].split("=");
+
+            if (keyVal.length === 2) {
+              var str = keyVal[1].trim();
+
+              switch (keyVal[0].trim()) {
+                case "alt":
+                  alt = str;
+                  break;
+
+                case "width":
+                  width = includegraphics_sizeData(str);
+                  break;
+
+                case "height":
+                  height = includegraphics_sizeData(str);
+                  break;
+
+                case "totalheight":
+                  totalheight = includegraphics_sizeData(str);
+                  break;
+
+                default:
+                  throw new src_ParseError("Invalid key: '" + keyVal[0] + "' in \\includegraphics.");
+              }
+            }
+          }
+        }
+
+        var src = assertNodeType(args[0], "url").url;
+
+        if (alt === "") {
+          // No alt given. Use the file name. Strip away the path.
+          alt = src;
+          alt = alt.replace(/^.*[\\/]/, '');
+          alt = alt.substring(0, alt.lastIndexOf('.'));
+        }
+
+        if (!parser.settings.isTrusted({
+          command: "\\includegraphics",
+          url: src
+        })) {
+          return parser.formatUnsupportedCmd("\\includegraphics");
+        }
+
+        return {
+          type: "includegraphics",
+          mode: parser.mode,
+          alt: alt,
+          width: width,
+          height: height,
+          totalheight: totalheight,
+          src: src
+        };
+      },
+      htmlBuilder: function htmlBuilder(group, options) {
+        var height = units_calculateSize(group.height, options);
+        var depth = 0;
+
+        if (group.totalheight.number > 0) {
+          depth = units_calculateSize(group.totalheight, options) - height;
+          depth = Number(depth.toFixed(2));
+        }
+
+        var width = 0;
+
+        if (group.width.number > 0) {
+          width = units_calculateSize(group.width, options);
+        }
+
+        var style = {
+          height: height + depth + "em"
+        };
+
+        if (width > 0) {
+          style.width = width + "em";
+        }
+
+        if (depth > 0) {
+          style.verticalAlign = -depth + "em";
+        }
+
+        var node = new domTree_Img(group.src, group.alt, style);
+        node.height = height;
+        node.depth = depth;
+        return node;
+      },
+      mathmlBuilder: function mathmlBuilder(group, options) {
+        var node = new mathMLTree.MathNode("mglyph", []);
+        node.setAttribute("alt", group.alt);
+        var height = units_calculateSize(group.height, options);
+        var depth = 0;
+
+        if (group.totalheight.number > 0) {
+          depth = units_calculateSize(group.totalheight, options) - height;
+          depth = depth.toFixed(2);
+          node.setAttribute("valign", "-" + depth + "em");
+        }
+
+        node.setAttribute("height", height + depth + "em");
+
+        if (group.width.number > 0) {
+          var width = units_calculateSize(group.width, options);
+          node.setAttribute("width", width + "em");
+        }
+
+        node.setAttribute("src", group.src);
+        return node;
       }
     });
     // CONCATENATED MODULE: ./src/functions/kern.js
@@ -72802,8 +73635,7 @@ var app = (function () {
       props: {
         numArgs: 0,
         allowedInText: true,
-        allowedInMath: false,
-        consumeMode: "math"
+        allowedInMath: false
       },
       handler: function handler(_ref, args) {
         var funcName = _ref.funcName,
@@ -72811,12 +73643,9 @@ var app = (function () {
         var outerMode = parser.mode;
         parser.switchMode("math");
         var close = funcName === "\\(" ? "\\)" : "$";
-        var body = parser.parseExpression(false, close); // We can't expand the next symbol after the closing $ until after
-        // switching modes back.  So don't consume within expect.
-
-        parser.expect(close, false);
+        var body = parser.parseExpression(false, close);
+        parser.expect(close);
         parser.switchMode(outerMode);
-        parser.consume();
         return {
           type: "styling",
           mode: parser.mode,
@@ -72892,8 +73721,126 @@ var app = (function () {
         return buildExpressionRow(body, options);
       }
     });
+    // CONCATENATED MODULE: ./src/functions/utils/assembleSupSub.js
+
+
+    // For an operator with limits, assemble the base, sup, and sub into a span.
+    var assembleSupSub_assembleSupSub = function assembleSupSub(base, supGroup, subGroup, options, style, slant, baseShift) {
+      // IE 8 clips \int if it is in a display: inline-block. We wrap it
+      // in a new span so it is an inline, and works.
+      base = buildCommon.makeSpan([], [base]);
+      var sub;
+      var sup; // We manually have to handle the superscripts and subscripts. This,
+      // aside from the kern calculations, is copied from supsub.
+
+      if (supGroup) {
+        var elem = buildHTML_buildGroup(supGroup, options.havingStyle(style.sup()), options);
+        sup = {
+          elem: elem,
+          kern: Math.max(options.fontMetrics().bigOpSpacing1, options.fontMetrics().bigOpSpacing3 - elem.depth)
+        };
+      }
+
+      if (subGroup) {
+        var _elem = buildHTML_buildGroup(subGroup, options.havingStyle(style.sub()), options);
+
+        sub = {
+          elem: _elem,
+          kern: Math.max(options.fontMetrics().bigOpSpacing2, options.fontMetrics().bigOpSpacing4 - _elem.height)
+        };
+      } // Build the final group as a vlist of the possible subscript, base,
+      // and possible superscript.
+
+
+      var finalGroup;
+
+      if (sup && sub) {
+        var bottom = options.fontMetrics().bigOpSpacing5 + sub.elem.height + sub.elem.depth + sub.kern + base.depth + baseShift;
+        finalGroup = buildCommon.makeVList({
+          positionType: "bottom",
+          positionData: bottom,
+          children: [{
+            type: "kern",
+            size: options.fontMetrics().bigOpSpacing5
+          }, {
+            type: "elem",
+            elem: sub.elem,
+            marginLeft: -slant + "em"
+          }, {
+            type: "kern",
+            size: sub.kern
+          }, {
+            type: "elem",
+            elem: base
+          }, {
+            type: "kern",
+            size: sup.kern
+          }, {
+            type: "elem",
+            elem: sup.elem,
+            marginLeft: slant + "em"
+          }, {
+            type: "kern",
+            size: options.fontMetrics().bigOpSpacing5
+          }]
+        }, options);
+      } else if (sub) {
+        var top = base.height - baseShift; // Shift the limits by the slant of the symbol. Note
+        // that we are supposed to shift the limits by 1/2 of the slant,
+        // but since we are centering the limits adding a full slant of
+        // margin will shift by 1/2 that.
+
+        finalGroup = buildCommon.makeVList({
+          positionType: "top",
+          positionData: top,
+          children: [{
+            type: "kern",
+            size: options.fontMetrics().bigOpSpacing5
+          }, {
+            type: "elem",
+            elem: sub.elem,
+            marginLeft: -slant + "em"
+          }, {
+            type: "kern",
+            size: sub.kern
+          }, {
+            type: "elem",
+            elem: base
+          }]
+        }, options);
+      } else if (sup) {
+        var _bottom = base.depth + baseShift;
+
+        finalGroup = buildCommon.makeVList({
+          positionType: "bottom",
+          positionData: _bottom,
+          children: [{
+            type: "elem",
+            elem: base
+          }, {
+            type: "kern",
+            size: sup.kern
+          }, {
+            type: "elem",
+            elem: sup.elem,
+            marginLeft: slant + "em"
+          }, {
+            type: "kern",
+            size: options.fontMetrics().bigOpSpacing5
+          }]
+        }, options);
+      } else {
+        // This case probably shouldn't occur (this would mean the
+        // supsub was sending us a group with no superscript or
+        // subscript) but be safe.
+        return base;
+      }
+
+      return buildCommon.makeSpan(["mop", "op-limits"], [finalGroup], options);
+    };
     // CONCATENATED MODULE: ./src/functions/op.js
     // Limits, symbols
+
 
 
 
@@ -72993,7 +73940,7 @@ var app = (function () {
         var output = [];
 
         for (var i = 1; i < group.name.length; i++) {
-          output.push(buildCommon.mathsym(group.name[i], group.mode));
+          output.push(buildCommon.mathsym(group.name[i], group.mode, options));
         }
 
         base = buildCommon.makeSpan(["mop"], output, options);
@@ -73017,117 +73964,7 @@ var app = (function () {
       }
 
       if (hasLimits) {
-        // IE 8 clips \int if it is in a display: inline-block. We wrap it
-        // in a new span so it is an inline, and works.
-        base = buildCommon.makeSpan([], [base]);
-        var sub;
-        var sup; // We manually have to handle the superscripts and subscripts. This,
-        // aside from the kern calculations, is copied from supsub.
-
-        if (supGroup) {
-          var elem = buildHTML_buildGroup(supGroup, options.havingStyle(style.sup()), options);
-          sup = {
-            elem: elem,
-            kern: Math.max(options.fontMetrics().bigOpSpacing1, options.fontMetrics().bigOpSpacing3 - elem.depth)
-          };
-        }
-
-        if (subGroup) {
-          var _elem = buildHTML_buildGroup(subGroup, options.havingStyle(style.sub()), options);
-
-          sub = {
-            elem: _elem,
-            kern: Math.max(options.fontMetrics().bigOpSpacing2, options.fontMetrics().bigOpSpacing4 - _elem.height)
-          };
-        } // Build the final group as a vlist of the possible subscript, base,
-        // and possible superscript.
-
-
-        var finalGroup;
-
-        if (sup && sub) {
-          var bottom = options.fontMetrics().bigOpSpacing5 + sub.elem.height + sub.elem.depth + sub.kern + base.depth + baseShift;
-          finalGroup = buildCommon.makeVList({
-            positionType: "bottom",
-            positionData: bottom,
-            children: [{
-              type: "kern",
-              size: options.fontMetrics().bigOpSpacing5
-            }, {
-              type: "elem",
-              elem: sub.elem,
-              marginLeft: -slant + "em"
-            }, {
-              type: "kern",
-              size: sub.kern
-            }, {
-              type: "elem",
-              elem: base
-            }, {
-              type: "kern",
-              size: sup.kern
-            }, {
-              type: "elem",
-              elem: sup.elem,
-              marginLeft: slant + "em"
-            }, {
-              type: "kern",
-              size: options.fontMetrics().bigOpSpacing5
-            }]
-          }, options);
-        } else if (sub) {
-          var top = base.height - baseShift; // Shift the limits by the slant of the symbol. Note
-          // that we are supposed to shift the limits by 1/2 of the slant,
-          // but since we are centering the limits adding a full slant of
-          // margin will shift by 1/2 that.
-
-          finalGroup = buildCommon.makeVList({
-            positionType: "top",
-            positionData: top,
-            children: [{
-              type: "kern",
-              size: options.fontMetrics().bigOpSpacing5
-            }, {
-              type: "elem",
-              elem: sub.elem,
-              marginLeft: -slant + "em"
-            }, {
-              type: "kern",
-              size: sub.kern
-            }, {
-              type: "elem",
-              elem: base
-            }]
-          }, options);
-        } else if (sup) {
-          var _bottom = base.depth + baseShift;
-
-          finalGroup = buildCommon.makeVList({
-            positionType: "bottom",
-            positionData: _bottom,
-            children: [{
-              type: "elem",
-              elem: base
-            }, {
-              type: "kern",
-              size: sup.kern
-            }, {
-              type: "elem",
-              elem: sup.elem,
-              marginLeft: slant + "em"
-            }, {
-              type: "kern",
-              size: options.fontMetrics().bigOpSpacing5
-            }]
-          }, options);
-        } else {
-          // This case probably shouldn't occur (this would mean the
-          // supsub was sending us a group with no superscript or
-          // subscript) but be safe.
-          return base;
-        }
-
-        return buildCommon.makeSpan(["mop", "op-limits"], [finalGroup], options);
+        return assembleSupSub_assembleSupSub(base, supGroup, subGroup, options, style, slant, baseShift);
       } else {
         if (baseShift) {
           base.style.position = "relative";
@@ -73154,8 +73991,6 @@ var app = (function () {
       } else {
         // This is a text operator. Add all of the characters from the
         // operator's name.
-        // TODO(emily): Add a space in the middle of some of these
-        // operators, like \limsup.
         node = new mathMLTree_MathNode("mi", [new mathMLTree_TextNode(group.name.slice(1))]); // Append an <mo>&ApplyFunction;</mo>.
         // ref: https://www.w3.org/TR/REC-MathML/chap3_2.html#sec3.2.4
 
@@ -73324,113 +74159,157 @@ var app = (function () {
 
 
 
-     // \operatorname
+
+
+
+    // NOTE: Unlike most `htmlBuilder`s, this one handles not only
+    // "operatorname", but also  "supsub" since \operatorname* can
+    var operatorname_htmlBuilder = function htmlBuilder(grp, options) {
+      // Operators are handled in the TeXbook pg. 443-444, rule 13(a).
+      var supGroup;
+      var subGroup;
+      var hasLimits = false;
+      var group;
+      var supSub = checkNodeType(grp, "supsub");
+
+      if (supSub) {
+        // If we have limits, supsub will pass us its group to handle. Pull
+        // out the superscript and subscript and set the group to the op in
+        // its base.
+        supGroup = supSub.sup;
+        subGroup = supSub.sub;
+        group = assertNodeType(supSub.base, "operatorname");
+        hasLimits = true;
+      } else {
+        group = assertNodeType(grp, "operatorname");
+      }
+
+      var base;
+
+      if (group.body.length > 0) {
+        var body = group.body.map(function (child) {
+          // $FlowFixMe: Check if the node has a string `text` property.
+          var childText = child.text;
+
+          if (typeof childText === "string") {
+            return {
+              type: "textord",
+              mode: child.mode,
+              text: childText
+            };
+          } else {
+            return child;
+          }
+        }); // Consolidate function names into symbol characters.
+
+        var expression = buildHTML_buildExpression(body, options.withFont("mathrm"), true);
+
+        for (var i = 0; i < expression.length; i++) {
+          var child = expression[i];
+
+          if (child instanceof domTree_SymbolNode) {
+            // Per amsopn package,
+            // change minus to hyphen and \ast to asterisk
+            child.text = child.text.replace(/\u2212/, "-").replace(/\u2217/, "*");
+          }
+        }
+
+        base = buildCommon.makeSpan(["mop"], expression, options);
+      } else {
+        base = buildCommon.makeSpan(["mop"], [], options);
+      }
+
+      if (hasLimits) {
+        return assembleSupSub_assembleSupSub(base, supGroup, subGroup, options, options.style, 0, 0);
+      } else {
+        return base;
+      }
+    };
+
+    var operatorname_mathmlBuilder = function mathmlBuilder(group, options) {
+      // The steps taken here are similar to the html version.
+      var expression = buildMathML_buildExpression(group.body, options.withFont("mathrm")); // Is expression a string or has it something like a fraction?
+
+      var isAllString = true; // default
+
+      for (var i = 0; i < expression.length; i++) {
+        var node = expression[i];
+
+        if (node instanceof mathMLTree.SpaceNode) ; else if (node instanceof mathMLTree.MathNode) {
+          switch (node.type) {
+            case "mi":
+            case "mn":
+            case "ms":
+            case "mspace":
+            case "mtext":
+              break;
+            // Do nothing yet.
+
+            case "mo":
+              {
+                var child = node.children[0];
+
+                if (node.children.length === 1 && child instanceof mathMLTree.TextNode) {
+                  child.text = child.text.replace(/\u2212/, "-").replace(/\u2217/, "*");
+                } else {
+                  isAllString = false;
+                }
+
+                break;
+              }
+
+            default:
+              isAllString = false;
+          }
+        } else {
+          isAllString = false;
+        }
+      }
+
+      if (isAllString) {
+        // Write a single TextNode instead of multiple nested tags.
+        var word = expression.map(function (node) {
+          return node.toText();
+        }).join("");
+        expression = [new mathMLTree.TextNode(word)];
+      }
+
+      var identifier = new mathMLTree.MathNode("mi", expression);
+      identifier.setAttribute("mathvariant", "normal"); // \u2061 is the same as &ApplyFunction;
+      // ref: https://www.w3schools.com/charsets/ref_html_entities_a.asp
+
+      var operator = new mathMLTree.MathNode("mo", [buildMathML_makeText("\u2061", "text")]);
+
+      if (group.parentIsSupSub) {
+        return new mathMLTree.MathNode("mo", [identifier, operator]);
+      } else {
+        return mathMLTree.newDocumentFragment([identifier, operator]);
+      }
+    }; // \operatorname
     // amsopn.dtx: \mathop{#1\kern\z@\operator@font#3}\newmcodes@
+
 
     defineFunction({
       type: "operatorname",
-      names: ["\\operatorname"],
+      names: ["\\operatorname", "\\operatorname*"],
       props: {
         numArgs: 1
       },
       handler: function handler(_ref, args) {
-        var parser = _ref.parser;
+        var parser = _ref.parser,
+            funcName = _ref.funcName;
         var body = args[0];
         return {
           type: "operatorname",
           mode: parser.mode,
-          body: defineFunction_ordargument(body)
+          body: defineFunction_ordargument(body),
+          alwaysHandleSupSub: funcName === "\\operatorname*",
+          limits: false,
+          parentIsSupSub: false
         };
       },
-      htmlBuilder: function htmlBuilder(group, options) {
-        if (group.body.length > 0) {
-          var body = group.body.map(function (child) {
-            // $FlowFixMe: Check if the node has a string `text` property.
-            var childText = child.text;
-
-            if (typeof childText === "string") {
-              return {
-                type: "textord",
-                mode: child.mode,
-                text: childText
-              };
-            } else {
-              return child;
-            }
-          }); // Consolidate function names into symbol characters.
-
-          var expression = buildHTML_buildExpression(body, options.withFont("mathrm"), true);
-
-          for (var i = 0; i < expression.length; i++) {
-            var child = expression[i];
-
-            if (child instanceof domTree_SymbolNode) {
-              // Per amsopn package,
-              // change minus to hyphen and \ast to asterisk
-              child.text = child.text.replace(/\u2212/, "-").replace(/\u2217/, "*");
-            }
-          }
-
-          return buildCommon.makeSpan(["mop"], expression, options);
-        } else {
-          return buildCommon.makeSpan(["mop"], [], options);
-        }
-      },
-      mathmlBuilder: function mathmlBuilder(group, options) {
-        // The steps taken here are similar to the html version.
-        var expression = buildMathML_buildExpression(group.body, options.withFont("mathrm")); // Is expression a string or has it something like a fraction?
-
-        var isAllString = true; // default
-
-        for (var i = 0; i < expression.length; i++) {
-          var node = expression[i];
-
-          if (node instanceof mathMLTree.SpaceNode) ; else if (node instanceof mathMLTree.MathNode) {
-            switch (node.type) {
-              case "mi":
-              case "mn":
-              case "ms":
-              case "mspace":
-              case "mtext":
-                break;
-              // Do nothing yet.
-
-              case "mo":
-                {
-                  var child = node.children[0];
-
-                  if (node.children.length === 1 && child instanceof mathMLTree.TextNode) {
-                    child.text = child.text.replace(/\u2212/, "-").replace(/\u2217/, "*");
-                  } else {
-                    isAllString = false;
-                  }
-
-                  break;
-                }
-
-              default:
-                isAllString = false;
-            }
-          } else {
-            isAllString = false;
-          }
-        }
-
-        if (isAllString) {
-          // Write a single TextNode instead of multiple nested tags.
-          var word = expression.map(function (node) {
-            return node.toText();
-          }).join("");
-          expression = [new mathMLTree.TextNode(word)];
-        }
-
-        var identifier = new mathMLTree.MathNode("mi", expression);
-        identifier.setAttribute("mathvariant", "normal"); // \u2061 is the same as &ApplyFunction;
-        // ref: https://www.w3schools.com/charsets/ref_html_entities_a.asp
-
-        var operator = new mathMLTree.MathNode("mo", [buildMathML_makeText("\u2061", "text")]);
-        return mathMLTree.newDocumentFragment([identifier, operator]);
-      }
+      htmlBuilder: operatorname_htmlBuilder,
+      mathmlBuilder: operatorname_mathmlBuilder
     });
     // CONCATENATED MODULE: ./src/functions/ordgroup.js
 
@@ -73447,7 +74326,7 @@ var app = (function () {
         return buildCommon.makeSpan(["mord"], buildHTML_buildExpression(group.body, options, true), options);
       },
       mathmlBuilder: function mathmlBuilder(group, options) {
-        return buildExpressionRow(group.body, options);
+        return buildExpressionRow(group.body, options, true);
       }
     });
     // CONCATENATED MODULE: ./src/functions/overline.js
@@ -73478,6 +74357,7 @@ var app = (function () {
 
         var line = buildCommon.makeLineSpan("overline-line", options); // Generate the vlist, with the appropriate kerns
 
+        var defaultRuleThickness = options.fontMetrics().defaultRuleThickness;
         var vlist = buildCommon.makeVList({
           positionType: "firstBaseline",
           children: [{
@@ -73485,13 +74365,13 @@ var app = (function () {
             elem: innerGroup
           }, {
             type: "kern",
-            size: 3 * line.height
+            size: 3 * defaultRuleThickness
           }, {
             type: "elem",
             elem: line
           }, {
             type: "kern",
-            size: line.height
+            size: defaultRuleThickness
           }]
         }, options);
         return buildCommon.makeSpan(["mord", "overline"], [vlist], options);
@@ -73614,77 +74494,6 @@ var app = (function () {
         return node;
       }
     });
-    // CONCATENATED MODULE: ./src/functions/sizing.js
-
-
-
-
-
-    function sizingGroup(value, options, baseOptions) {
-      var inner = buildHTML_buildExpression(value, options, false);
-      var multiplier = options.sizeMultiplier / baseOptions.sizeMultiplier; // Add size-resetting classes to the inner list and set maxFontSize
-      // manually. Handle nested size changes.
-
-      for (var i = 0; i < inner.length; i++) {
-        var pos = inner[i].classes.indexOf("sizing");
-
-        if (pos < 0) {
-          Array.prototype.push.apply(inner[i].classes, options.sizingClasses(baseOptions));
-        } else if (inner[i].classes[pos + 1] === "reset-size" + options.size) {
-          // This is a nested size change: e.g., inner[i] is the "b" in
-          // `\Huge a \small b`. Override the old size (the `reset-` class)
-          // but not the new size.
-          inner[i].classes[pos + 1] = "reset-size" + baseOptions.size;
-        }
-
-        inner[i].height *= multiplier;
-        inner[i].depth *= multiplier;
-      }
-
-      return buildCommon.makeFragment(inner);
-    }
-    var sizeFuncs = ["\\tiny", "\\sixptsize", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize", "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge"];
-    var sizing_htmlBuilder = function htmlBuilder(group, options) {
-      // Handle sizing operators like \Huge. Real TeX doesn't actually allow
-      // these functions inside of math expressions, so we do some special
-      // handling.
-      var newOptions = options.havingSize(group.size);
-      return sizingGroup(group.body, newOptions, options);
-    };
-    defineFunction({
-      type: "sizing",
-      names: sizeFuncs,
-      props: {
-        numArgs: 0,
-        allowedInText: true
-      },
-      handler: function handler(_ref, args) {
-        var breakOnTokenText = _ref.breakOnTokenText,
-            funcName = _ref.funcName,
-            parser = _ref.parser;
-        var body = parser.parseExpression(false, breakOnTokenText);
-        return {
-          type: "sizing",
-          mode: parser.mode,
-          // Figure out what size to use based on the list of functions above
-          size: sizeFuncs.indexOf(funcName) + 1,
-          body: body
-        };
-      },
-      htmlBuilder: sizing_htmlBuilder,
-      mathmlBuilder: function mathmlBuilder(group, options) {
-        var newOptions = options.havingSize(group.size);
-        var inner = buildMathML_buildExpression(group.body, newOptions);
-        var node = new mathMLTree.MathNode("mstyle", inner); // TODO(emily): This doesn't produce the correct size for nested size
-        // changes, because we don't keep state of what style we're currently
-        // in, so we can't reset the size to normal before changing it.  Now
-        // that we're passing an options parameter we should be able to fix
-        // this.
-
-        node.setAttribute("mathsize", newOptions.sizeMultiplier + "em");
-        return node;
-      }
-    });
     // CONCATENATED MODULE: ./src/functions/raisebox.js
 
 
@@ -73699,7 +74508,7 @@ var app = (function () {
       names: ["\\raisebox"],
       props: {
         numArgs: 2,
-        argTypes: ["size", "text"],
+        argTypes: ["size", "hbox"],
         allowedInText: true
       },
       handler: function handler(_ref, args) {
@@ -73714,21 +74523,7 @@ var app = (function () {
         };
       },
       htmlBuilder: function htmlBuilder(group, options) {
-        var text = {
-          type: "text",
-          mode: group.mode,
-          body: defineFunction_ordargument(group.body),
-          font: "mathrm" // simulate \textrm
-
-        };
-        var sizedText = {
-          type: "sizing",
-          mode: group.mode,
-          body: [text],
-          size: 6 // simulate \normalsize
-
-        };
-        var body = sizing_htmlBuilder(sizedText, options);
+        var body = buildHTML_buildGroup(group.body, options);
         var dy = units_calculateSize(group.dy, options);
         return buildCommon.makeVList({
           positionType: "shift",
@@ -73814,6 +74609,77 @@ var app = (function () {
 
         wrapper.setAttribute("voffset", shift + "em");
         return wrapper;
+      }
+    });
+    // CONCATENATED MODULE: ./src/functions/sizing.js
+
+
+
+
+
+    function sizingGroup(value, options, baseOptions) {
+      var inner = buildHTML_buildExpression(value, options, false);
+      var multiplier = options.sizeMultiplier / baseOptions.sizeMultiplier; // Add size-resetting classes to the inner list and set maxFontSize
+      // manually. Handle nested size changes.
+
+      for (var i = 0; i < inner.length; i++) {
+        var pos = inner[i].classes.indexOf("sizing");
+
+        if (pos < 0) {
+          Array.prototype.push.apply(inner[i].classes, options.sizingClasses(baseOptions));
+        } else if (inner[i].classes[pos + 1] === "reset-size" + options.size) {
+          // This is a nested size change: e.g., inner[i] is the "b" in
+          // `\Huge a \small b`. Override the old size (the `reset-` class)
+          // but not the new size.
+          inner[i].classes[pos + 1] = "reset-size" + baseOptions.size;
+        }
+
+        inner[i].height *= multiplier;
+        inner[i].depth *= multiplier;
+      }
+
+      return buildCommon.makeFragment(inner);
+    }
+    var sizeFuncs = ["\\tiny", "\\sixptsize", "\\scriptsize", "\\footnotesize", "\\small", "\\normalsize", "\\large", "\\Large", "\\LARGE", "\\huge", "\\Huge"];
+    var sizing_htmlBuilder = function htmlBuilder(group, options) {
+      // Handle sizing operators like \Huge. Real TeX doesn't actually allow
+      // these functions inside of math expressions, so we do some special
+      // handling.
+      var newOptions = options.havingSize(group.size);
+      return sizingGroup(group.body, newOptions, options);
+    };
+    defineFunction({
+      type: "sizing",
+      names: sizeFuncs,
+      props: {
+        numArgs: 0,
+        allowedInText: true
+      },
+      handler: function handler(_ref, args) {
+        var breakOnTokenText = _ref.breakOnTokenText,
+            funcName = _ref.funcName,
+            parser = _ref.parser;
+        var body = parser.parseExpression(false, breakOnTokenText);
+        return {
+          type: "sizing",
+          mode: parser.mode,
+          // Figure out what size to use based on the list of functions above
+          size: sizeFuncs.indexOf(funcName) + 1,
+          body: body
+        };
+      },
+      htmlBuilder: sizing_htmlBuilder,
+      mathmlBuilder: function mathmlBuilder(group, options) {
+        var newOptions = options.havingSize(group.size);
+        var inner = buildMathML_buildExpression(group.body, newOptions);
+        var node = new mathMLTree.MathNode("mstyle", inner); // TODO(emily): This doesn't produce the correct size for nested size
+        // changes, because we don't keep state of what style we're currently
+        // in, so we can't reset the size to normal before changing it.  Now
+        // that we're passing an options parameter we should be able to fix
+        // this.
+
+        node.setAttribute("mathsize", newOptions.sizeMultiplier + "em");
+        return node;
       }
     });
     // CONCATENATED MODULE: ./src/functions/smash.js
@@ -74091,15 +74957,7 @@ var app = (function () {
       },
       mathmlBuilder: function mathmlBuilder(group, options) {
         // Figure out what style we're changing to.
-        // TODO(kevinb): dedupe this with buildHTML.js
-        // This will be easier of handling of styling nodes is in the same file.
-        var styleMap = {
-          "display": src_Style.DISPLAY,
-          "text": src_Style.TEXT,
-          "script": src_Style.SCRIPT,
-          "scriptscript": src_Style.SCRIPTSCRIPT
-        };
-        var newStyle = styleMap[group.style];
+        var newStyle = styling_styleMap[group.style];
         var newOptions = options.havingStyle(newStyle);
         var inner = buildMathML_buildExpression(group.body, newOptions);
         var node = new mathMLTree.MathNode("mstyle", inner);
@@ -74116,6 +74974,7 @@ var app = (function () {
       }
     });
     // CONCATENATED MODULE: ./src/functions/supsub.js
+
 
 
 
@@ -74146,6 +75005,10 @@ var app = (function () {
         // (e.g. `\displaystyle\sum_2^3`)
         var delegate = base.limits && (options.style.size === src_Style.DISPLAY.size || base.alwaysHandleSupSub);
         return delegate ? op_htmlBuilder : null;
+      } else if (base.type === "operatorname") {
+        var _delegate = base.alwaysHandleSupSub && (options.style.size === src_Style.DISPLAY.size || base.limits);
+
+        return _delegate ? operatorname_htmlBuilder : null;
       } else if (base.type === "accent") {
         return utils.isCharacterBox(base.base) ? accent_htmlBuilder : null;
       } else if (base.type === "horizBrace") {
@@ -74316,7 +75179,7 @@ var app = (function () {
           }
         }
 
-        if (group.base && group.base.type === "op") {
+        if (group.base && (group.base.type === "op" || group.base.type === "operatorname")) {
           group.base.parentIsSupSub = true;
         }
 
@@ -74339,6 +75202,8 @@ var app = (function () {
 
           if (base && base.type === "op" && base.limits && (options.style === src_Style.DISPLAY || base.alwaysHandleSupSub)) {
             nodeType = "mover";
+          } else if (base && base.type === "operatorname" && base.alwaysHandleSupSub && (base.limits || options.style === src_Style.DISPLAY)) {
+            nodeType = "mover";
           } else {
             nodeType = "msup";
           }
@@ -74347,6 +75212,8 @@ var app = (function () {
 
           if (_base && _base.type === "op" && _base.limits && (options.style === src_Style.DISPLAY || _base.alwaysHandleSupSub)) {
             nodeType = "munder";
+          } else if (_base && _base.type === "operatorname" && _base.alwaysHandleSupSub && (_base.limits || options.style === src_Style.DISPLAY)) {
+            nodeType = "munder";
           } else {
             nodeType = "msub";
           }
@@ -74354,6 +75221,8 @@ var app = (function () {
           var _base2 = group.base;
 
           if (_base2 && _base2.type === "op" && _base2.limits && options.style === src_Style.DISPLAY) {
+            nodeType = "munderover";
+          } else if (_base2 && _base2.type === "operatorname" && _base2.alwaysHandleSupSub && (options.style === src_Style.DISPLAY || _base2.limits)) {
             nodeType = "munderover";
           } else {
             nodeType = "msubsup";
@@ -74587,8 +75456,7 @@ var app = (function () {
         numArgs: 1,
         argTypes: ["text"],
         greediness: 2,
-        allowedInText: true,
-        consumeMode: "text"
+        allowedInText: true
       },
       handler: function handler(_ref, args) {
         var parser = _ref.parser,
@@ -74639,18 +75507,19 @@ var app = (function () {
 
         var line = buildCommon.makeLineSpan("underline-line", options); // Generate the vlist, with the appropriate kerns
 
+        var defaultRuleThickness = options.fontMetrics().defaultRuleThickness;
         var vlist = buildCommon.makeVList({
           positionType: "top",
           positionData: innerGroup.height,
           children: [{
             type: "kern",
-            size: line.height
+            size: defaultRuleThickness
           }, {
             type: "elem",
             elem: line
           }, {
             type: "kern",
-            size: 3 * line.height
+            size: 3 * defaultRuleThickness
           }, {
             type: "elem",
             elem: innerGroup
@@ -74740,8 +75609,7 @@ var app = (function () {
 
 
 
-     // Disabled until https://github.com/KaTeX/KaTeX/pull/1794 is merged.
-    // import "./functions/includegraphics";
+
 
 
 
@@ -74812,7 +75680,8 @@ var app = (function () {
     "|[\uD800-\uDBFF][\uDC00-\uDFFF]" + ( // surrogate pair
     combiningDiacriticalMarkString + "*") + // ...plus accents
     "|\\\\verb\\*([^]).*?\\3" + // \verb*
-    "|\\\\verb([^*a-zA-Z]).*?\\4" + ( // \verb unstarred
+    "|\\\\verb([^*a-zA-Z]).*?\\4" + // \verb unstarred
+    "|\\\\operatorname\\*" + ( // \operatorname*
     "|" + controlWordWhitespaceRegexString) + ( // \macroName + spaces
     "|" + controlSymbolRegexString + ")"); // \\, \', etc.
 
@@ -75415,7 +76284,9 @@ var app = (function () {
     defineMacro("\\varUpsilon", "\\mathit{\\Upsilon}");
     defineMacro("\\varPhi", "\\mathit{\\Phi}");
     defineMacro("\\varPsi", "\\mathit{\\Psi}");
-    defineMacro("\\varOmega", "\\mathit{\\Omega}"); // \renewcommand{\colon}{\nobreak\mskip2mu\mathpunct{}\nonscript
+    defineMacro("\\varOmega", "\\mathit{\\Omega}"); //\newcommand{\substack}[1]{\subarray{c}#1\endsubarray}
+
+    defineMacro("\\substack", "\\begin{subarray}{c}#1\\end{subarray}"); // \renewcommand{\colon}{\nobreak\mskip2mu\mathpunct{}\nonscript
     // \mkern-\thinmuskip{:}\mskip6muplus1mu\relax}
 
     defineMacro("\\colon", "\\nobreak\\mskip2mu\\mathpunct{}" + "\\mathchoice{\\mkern-3mu}{\\mkern-3mu}{}{}{:}\\mskip6mu"); // \newcommand{\boxed}[1]{\fbox{\m@th$\displaystyle#1$}}
@@ -75632,10 +76503,11 @@ var app = (function () {
     defineMacro("\\pod", "\\allowbreak" + "\\mathchoice{\\mkern18mu}{\\mkern8mu}{\\mkern8mu}{\\mkern8mu}(#1)");
     defineMacro("\\pmod", "\\pod{{\\rm mod}\\mkern6mu#1}");
     defineMacro("\\mod", "\\allowbreak" + "\\mathchoice{\\mkern18mu}{\\mkern12mu}{\\mkern12mu}{\\mkern12mu}" + "{\\rm mod}\\,\\,#1"); // \pmb    --   A simulation of bold.
-    // It works by typesetting three copies of the argument with small offsets.
-    // Ref: a rather lengthy macro in ambsy.sty
+    // The version in ambsy.sty works by typesetting three copies of the argument
+    // with small offsets. We use two copies. We omit the vertical offset because
+    // of rendering problems that makeVList encounters in Safari.
 
-    defineMacro("\\pmb", "\\html@mathml{\\@binrel{#1}{" + "\\mathrlap{#1}" + "\\mathrlap{\\mkern0.4mu\\raisebox{0.4mu}{$#1$}}" + "{\\mkern0.8mu#1}" + "}}{\\mathbf{#1}}"); //////////////////////////////////////////////////////////////////////
+    defineMacro("\\pmb", "\\html@mathml{" + "\\@binrel{#1}{\\mathrlap{#1}\\kern0.5px#1}}" + "{\\mathbf{#1}}"); //////////////////////////////////////////////////////////////////////
     // LaTeX source2e
     // \\ defaults to \newline, but changes to \cr within array environment
 
@@ -75656,13 +76528,13 @@ var app = (function () {
     //         \TeX}
     // This code aligns the top of the A with the T (from the perspective of TeX's
     // boxes, though visually the A appears to extend above slightly).
-    // We compute the corresponding \raisebox when A is rendered at \scriptsize,
-    // which is size3, which has a scale factor of 0.7 (see Options.js).
+    // We compute the corresponding \raisebox when A is rendered in \normalsize
+    // \scriptstyle, which has a scale factor of 0.7 (see Options.js).
 
     var latexRaiseA = fontMetricsData['Main-Regular']["T".charCodeAt(0)][1] - 0.7 * fontMetricsData['Main-Regular']["A".charCodeAt(0)][1] + "em";
-    defineMacro("\\LaTeX", "\\textrm{\\html@mathml{" + ("L\\kern-.36em\\raisebox{" + latexRaiseA + "}{\\scriptsize A}") + "\\kern-.15em\\TeX}{LaTeX}}"); // New KaTeX logo based on tweaking LaTeX logo
+    defineMacro("\\LaTeX", "\\textrm{\\html@mathml{" + ("L\\kern-.36em\\raisebox{" + latexRaiseA + "}{\\scriptstyle A}") + "\\kern-.15em\\TeX}{LaTeX}}"); // New KaTeX logo based on tweaking LaTeX logo
 
-    defineMacro("\\KaTeX", "\\textrm{\\html@mathml{" + ("K\\kern-.17em\\raisebox{" + latexRaiseA + "}{\\scriptsize A}") + "\\kern-.15em\\TeX}{KaTeX}}"); // \DeclareRobustCommand\hspace{\@ifstar\@hspacer\@hspace}
+    defineMacro("\\KaTeX", "\\textrm{\\html@mathml{" + ("K\\kern-.17em\\raisebox{" + latexRaiseA + "}{\\scriptstyle A}") + "\\kern-.15em\\TeX}{KaTeX}}"); // \DeclareRobustCommand\hspace{\@ifstar\@hspacer\@hspace}
     // \def\@hspace#1{\hskip  #1\relax}
     // \def\@hspacer#1{\vrule \@width\z@\nobreak
     //                 \hskip #1\hskip \z@skip}
@@ -75740,8 +76612,8 @@ var app = (function () {
     defineMacro("\\approxcoloncolon", "\\mathrel{\\approx\\mathrel{\\mkern-1.2mu}\\dblcolon}"); // Present in newtxmath, pxfonts and txfonts
 
     defineMacro("\\notni", "\\html@mathml{\\not\\ni}{\\mathrel{\\char`\u220C}}");
-    defineMacro("\\limsup", "\\DOTSB\\mathop{\\operatorname{lim\\,sup}}\\limits");
-    defineMacro("\\liminf", "\\DOTSB\\mathop{\\operatorname{lim\\,inf}}\\limits"); //////////////////////////////////////////////////////////////////////
+    defineMacro("\\limsup", "\\DOTSB\\operatorname*{lim\\,sup}");
+    defineMacro("\\liminf", "\\DOTSB\\operatorname*{lim\\,inf}"); //////////////////////////////////////////////////////////////////////
     // MathML alternates for KaTeX glyphs in the Unicode private area
 
     defineMacro("\\gvertneqq", "\\html@mathml{\\@gvertneqq}{\u2269}");
@@ -75849,15 +76721,16 @@ var app = (function () {
     // statmath.sty
     // https://ctan.math.illinois.edu/macros/latex/contrib/statmath/statmath.pdf
 
-    defineMacro("\\argmin", "\\DOTSB\\mathop{\\operatorname{arg\\,min}}\\limits");
-    defineMacro("\\argmax", "\\DOTSB\\mathop{\\operatorname{arg\\,max}}\\limits"); // Custom Khan Academy colors, should be moved to an optional package
+    defineMacro("\\argmin", "\\DOTSB\\operatorname*{arg\\,min}");
+    defineMacro("\\argmax", "\\DOTSB\\operatorname*{arg\\,max}");
+    defineMacro("\\plim", "\\DOTSB\\mathop{\\operatorname{plim}}\\limits"); // Custom Khan Academy colors, should be moved to an optional package
 
     defineMacro("\\blue", "\\textcolor{##6495ed}{#1}");
     defineMacro("\\orange", "\\textcolor{##ffa500}{#1}");
     defineMacro("\\pink", "\\textcolor{##ff00af}{#1}");
     defineMacro("\\red", "\\textcolor{##df0030}{#1}");
     defineMacro("\\green", "\\textcolor{##28ae7b}{#1}");
-    defineMacro("\\gray", "\\textcolor{gray}{##1}");
+    defineMacro("\\gray", "\\textcolor{gray}{#1}");
     defineMacro("\\purple", "\\textcolor{##9d38bd}{#1}");
     defineMacro("\\blueA", "\\textcolor{##ccfaff}{#1}");
     defineMacro("\\blueB", "\\textcolor{##80f6ff}{#1}");
@@ -77013,7 +77886,6 @@ var app = (function () {
 
 
 
-
     /**
      * This file contains the parser used to parse out a TeX expression from the
      * input. Since TeX isn't context-free, standard parsers don't work particularly
@@ -77075,8 +77947,8 @@ var app = (function () {
           consume = true;
         }
 
-        if (this.nextToken.text !== text) {
-          throw new src_ParseError("Expected '" + text + "', got '" + this.nextToken.text + "'", this.nextToken);
+        if (this.fetch().text !== text) {
+          throw new src_ParseError("Expected '" + text + "', got '" + this.fetch().text + "'", this.fetch());
         }
 
         if (consume) {
@@ -77084,13 +77956,26 @@ var app = (function () {
         }
       }
       /**
-       * Considers the current look ahead token as consumed,
-       * and fetches the one after that as the new look ahead.
+       * Discards the current lookahead token, considering it consumed.
        */
       ;
 
       _proto.consume = function consume() {
-        this.nextToken = this.gullet.expandNextToken();
+        this.nextToken = null;
+      }
+      /**
+       * Return the current lookahead token, or if there isn't one (at the
+       * beginning, or if the previous lookahead token was consume()d),
+       * fetch the next token as the new lookahead token and return it.
+       */
+      ;
+
+      _proto.fetch = function fetch() {
+        if (this.nextToken == null) {
+          this.nextToken = this.gullet.expandNextToken();
+        }
+
+        return this.nextToken;
       }
       /**
        * Switches between "text" and "math" modes.
@@ -77118,10 +78003,9 @@ var app = (function () {
         } // Try to parse the input
 
 
-        this.consume();
         var parse = this.parseExpression(false); // If we succeeded, make sure there's an EOF at the end
 
-        this.expect("EOF", false); // End the group namespace for the expression
+        this.expect("EOF"); // End the group namespace for the expression
 
         this.gullet.endGroup();
         return parse;
@@ -77137,7 +78021,7 @@ var app = (function () {
             this.consumeSpaces();
           }
 
-          var lex = this.nextToken;
+          var lex = this.fetch();
 
           if (Parser.endOfExpression.indexOf(lex.text) !== -1) {
             break;
@@ -77237,12 +78121,10 @@ var app = (function () {
        * Handle a subscript or superscript with nice errors.
        */
       _proto.handleSupSubscript = function handleSupSubscript(name) {
-        var symbolToken = this.nextToken;
+        var symbolToken = this.fetch();
         var symbol = symbolToken.text;
         this.consume();
-        this.consumeSpaces(); // ignore spaces before sup/subscript argument
-
-        var group = this.parseGroup(name, false, Parser.SUPSUB_GREEDINESS);
+        var group = this.parseGroup(name, false, Parser.SUPSUB_GREEDINESS, undefined, undefined, true); // ignore spaces before sup/subscript argument
 
         if (!group) {
           throw new src_ParseError("Expected group after '" + symbol + "'", symbolToken);
@@ -77256,8 +78138,7 @@ var app = (function () {
        */
       ;
 
-      _proto.handleUnsupportedCmd = function handleUnsupportedCmd() {
-        var text = this.nextToken.text;
+      _proto.formatUnsupportedCmd = function formatUnsupportedCmd(text) {
         var textordArray = [];
 
         for (var i = 0; i < text.length; i++) {
@@ -77279,7 +78160,6 @@ var app = (function () {
           color: this.settings.errorColor,
           body: [textNode]
         };
-        this.consume();
         return colorNode;
       }
       /**
@@ -77304,7 +78184,7 @@ var app = (function () {
           // Guaranteed in math mode, so eat any spaces first.
           this.consumeSpaces(); // Lex the first token
 
-          var lex = this.nextToken;
+          var lex = this.fetch();
 
           if (lex.text === "\\limits" || lex.text === "\\nolimits") {
             // We got a limit control
@@ -77315,7 +78195,15 @@ var app = (function () {
               opNode.limits = limits;
               opNode.alwaysHandleSupSub = true;
             } else {
-              throw new src_ParseError("Limit controls must follow a math operator", lex);
+              opNode = checkNodeType(base, "operatorname");
+
+              if (opNode && opNode.alwaysHandleSupSub) {
+                var _limits = lex.text === "\\limits";
+
+                opNode.limits = _limits;
+              } else {
+                throw new src_ParseError("Limit controls must follow a math operator", lex);
+              }
             }
 
             this.consume();
@@ -77348,7 +78236,7 @@ var app = (function () {
             var primes = [prime];
             this.consume(); // Keep lexing tokens until we get something that's not a prime
 
-            while (this.nextToken.text === "'") {
+            while (this.fetch().text === "'") {
               // For each one, add another prime to the list
               primes.push(prime);
               this.consume();
@@ -77356,7 +78244,7 @@ var app = (function () {
             // superscript in with the primes.
 
 
-            if (this.nextToken.text === "^") {
+            if (this.fetch().text === "^") {
               primes.push(this.handleSupSubscript("superscript"));
             } // Put everything into an ordgroup as the superscript
 
@@ -77395,7 +78283,7 @@ var app = (function () {
 
       _proto.parseFunction = function parseFunction(breakOnTokenText, name, // For error reporting.
       greediness) {
-        var token = this.nextToken;
+        var token = this.fetch();
         var func = token.text;
         var funcData = src_functions[func];
 
@@ -77403,29 +78291,14 @@ var app = (function () {
           return null;
         }
 
+        this.consume(); // consume command token
+
         if (greediness != null && funcData.greediness <= greediness) {
           throw new src_ParseError("Got function '" + func + "' with no arguments" + (name ? " as " + name : ""), token);
         } else if (this.mode === "text" && !funcData.allowedInText) {
           throw new src_ParseError("Can't use function '" + func + "' in text mode", token);
         } else if (this.mode === "math" && funcData.allowedInMath === false) {
           throw new src_ParseError("Can't use function '" + func + "' in math mode", token);
-        } // hyperref package sets the catcode of % as an active character
-
-
-        if (funcData.argTypes && funcData.argTypes[0] === "url") {
-          this.gullet.lexer.setCatcode("%", 13);
-        } // Consume the command token after possibly switching to the
-        // mode specified by the function (for instant mode switching),
-        // and then immediately switch back.
-
-
-        if (funcData.consumeMode) {
-          var oldMode = this.mode;
-          this.switchMode(funcData.consumeMode);
-          this.consume();
-          this.switchMode(oldMode);
-        } else {
-          this.consume();
         }
 
         var _this$parseArguments = this.parseArguments(func, funcData),
@@ -77481,22 +78354,14 @@ var app = (function () {
           //  put spaces between the arguments (e.g., ‘\row x n’), because
           //  TeX doesn’t use single spaces as undelimited arguments."
 
-          if (i > 0 && !isOptional) {
-            this.consumeSpaces();
-          } // Also consume leading spaces in math mode, as parseSymbol
+          var consumeSpaces = i > 0 && !isOptional || // Also consume leading spaces in math mode, as parseSymbol
           // won't know what to do with them.  This can only happen with
           // macros, e.g. \frac\foo\foo where \foo expands to a space symbol.
-          // In LaTeX, the \foo's get treated as (blank) arguments).
+          // In LaTeX, the \foo's get treated as (blank) arguments.
           // In KaTeX, for now, both spaces will get consumed.
           // TODO(edemaine)
-
-
-          if (i === 0 && !isOptional && this.mode === "math") {
-            this.consumeSpaces();
-          }
-
-          var nextToken = this.nextToken;
-          var arg = this.parseGroupOfType("argument to '" + func + "'", argType, isOptional, baseGreediness);
+          i === 0 && !isOptional && this.mode === "math";
+          var arg = this.parseGroupOfType("argument to '" + func + "'", argType, isOptional, baseGreediness, consumeSpaces);
 
           if (!arg) {
             if (isOptional) {
@@ -77504,7 +78369,7 @@ var app = (function () {
               continue;
             }
 
-            throw new src_ParseError("Expected group after '" + func + "'", nextToken);
+            throw new src_ParseError("Expected group after '" + func + "'", this.fetch());
           }
 
           (isOptional ? optArgs : args).push(arg);
@@ -77520,24 +78385,56 @@ var app = (function () {
        */
       ;
 
-      _proto.parseGroupOfType = function parseGroupOfType(name, type, optional, greediness) {
+      _proto.parseGroupOfType = function parseGroupOfType(name, type, optional, greediness, consumeSpaces) {
         switch (type) {
           case "color":
+            if (consumeSpaces) {
+              this.consumeSpaces();
+            }
+
             return this.parseColorGroup(optional);
 
           case "size":
+            if (consumeSpaces) {
+              this.consumeSpaces();
+            }
+
             return this.parseSizeGroup(optional);
 
           case "url":
-            return this.parseUrlGroup(optional);
+            return this.parseUrlGroup(optional, consumeSpaces);
 
           case "math":
           case "text":
-            return this.parseGroup(name, optional, greediness, undefined, type);
+            return this.parseGroup(name, optional, greediness, undefined, type, consumeSpaces);
+
+          case "hbox":
+            {
+              // hbox argument type wraps the argument in the equivalent of
+              // \hbox, which is like \text but switching to \textstyle size.
+              var group = this.parseGroup(name, optional, greediness, undefined, "text", consumeSpaces);
+
+              if (!group) {
+                return group;
+              }
+
+              var styledGroup = {
+                type: "styling",
+                mode: group.mode,
+                body: [group],
+                style: "text" // simulate \textstyle
+
+              };
+              return styledGroup;
+            }
 
           case "raw":
             {
-              if (optional && this.nextToken.text === "{") {
+              if (consumeSpaces) {
+                this.consumeSpaces();
+              }
+
+              if (optional && this.fetch().text === "{") {
                 return null;
               }
 
@@ -77550,22 +78447,26 @@ var app = (function () {
                   string: token.text
                 };
               } else {
-                throw new src_ParseError("Expected raw group", this.nextToken);
+                throw new src_ParseError("Expected raw group", this.fetch());
               }
             }
 
           case "original":
           case null:
           case undefined:
-            return this.parseGroup(name, optional, greediness);
+            return this.parseGroup(name, optional, greediness, undefined, undefined, consumeSpaces);
 
           default:
-            throw new src_ParseError("Unknown group type as " + name, this.nextToken);
+            throw new src_ParseError("Unknown group type as " + name, this.fetch());
         }
-      };
+      }
+      /**
+       * Discard any space tokens, fetching the next non-space token.
+       */
+      ;
 
       _proto.consumeSpaces = function consumeSpaces() {
-        while (this.nextToken.text === " ") {
+        while (this.fetch().text === " ") {
           this.consume();
         }
       }
@@ -77579,17 +78480,14 @@ var app = (function () {
       optional, raw) {
         var groupBegin = optional ? "[" : "{";
         var groupEnd = optional ? "]" : "}";
-        var nextToken = this.nextToken;
+        var beginToken = this.fetch();
 
-        if (nextToken.text !== groupBegin) {
+        if (beginToken.text !== groupBegin) {
           if (optional) {
             return null;
-          } else if (raw && nextToken.text !== "EOF" && /[^{}[\]]/.test(nextToken.text)) {
-            // allow a single character in raw string group
-            this.gullet.lexer.setCatcode("%", 14); // reset the catcode of %
-
+          } else if (raw && beginToken.text !== "EOF" && /[^{}[\]]/.test(beginToken.text)) {
             this.consume();
-            return nextToken;
+            return beginToken;
           }
         }
 
@@ -77597,13 +78495,14 @@ var app = (function () {
         this.mode = "text";
         this.expect(groupBegin);
         var str = "";
-        var firstToken = this.nextToken;
+        var firstToken = this.fetch();
         var nested = 0; // allow nested braces in raw string group
 
         var lastToken = firstToken;
+        var nextToken;
 
-        while (raw && nested > 0 || this.nextToken.text !== groupEnd) {
-          switch (this.nextToken.text) {
+        while ((nextToken = this.fetch()).text !== groupEnd || raw && nested > 0) {
+          switch (nextToken.text) {
             case "EOF":
               throw new src_ParseError("Unexpected end of input in " + modeName, firstToken.range(lastToken, str));
 
@@ -77616,15 +78515,13 @@ var app = (function () {
               break;
           }
 
-          lastToken = this.nextToken;
+          lastToken = nextToken;
           str += lastToken.text;
           this.consume();
         }
 
-        this.mode = outerMode;
-        this.gullet.lexer.setCatcode("%", 14); // reset the catcode of %
-
         this.expect(groupEnd);
+        this.mode = outerMode;
         return firstToken.range(lastToken, str);
       }
       /**
@@ -77637,12 +78534,13 @@ var app = (function () {
       _proto.parseRegexGroup = function parseRegexGroup(regex, modeName) {
         var outerMode = this.mode;
         this.mode = "text";
-        var firstToken = this.nextToken;
+        var firstToken = this.fetch();
         var lastToken = firstToken;
         var str = "";
+        var nextToken;
 
-        while (this.nextToken.text !== "EOF" && regex.test(str + this.nextToken.text)) {
-          lastToken = this.nextToken;
+        while ((nextToken = this.fetch()).text !== "EOF" && regex.test(str + nextToken.text)) {
+          lastToken = nextToken;
           str += lastToken.text;
           this.consume();
         }
@@ -77696,7 +78594,7 @@ var app = (function () {
         var res;
         var isBlank = false;
 
-        if (!optional && this.nextToken.text !== "{") {
+        if (!optional && this.fetch().text !== "{") {
           res = this.parseRegexGroup(/^[-+]? *(?:$|\d+|\d+\.\d*|\.\d*) *[a-z]{0,2} *$/, "size");
         } else {
           res = this.parseStringGroup("size", optional);
@@ -77739,12 +78637,17 @@ var app = (function () {
         };
       }
       /**
-       * Parses an URL, checking escaped letters and allowed protocols.
+       * Parses an URL, checking escaped letters and allowed protocols,
+       * and setting the catcode of % as an active character (as in \hyperref).
        */
       ;
 
-      _proto.parseUrlGroup = function parseUrlGroup(optional) {
+      _proto.parseUrlGroup = function parseUrlGroup(optional, consumeSpaces) {
+        this.gullet.lexer.setCatcode("%", 13); // active character
+
         var res = this.parseStringGroup("url", optional, true); // get raw string
+
+        this.gullet.lexer.setCatcode("%", 14); // comment character
 
         if (!res) {
           return null;
@@ -77755,14 +78658,6 @@ var app = (function () {
 
 
         var url = res.text.replace(/\\([#$%&~_^{}])/g, '$1');
-        var protocol = /^\s*([^\\/#]*?)(?::|&#0*58|&#x0*3a)/i.exec(url);
-        protocol = protocol != null ? protocol[1] : "_relative";
-        var allowed = this.settings.allowedProtocols;
-
-        if (!utils.contains(allowed, "*") && !utils.contains(allowed, protocol)) {
-          throw new src_ParseError("Forbidden protocol '" + protocol + "'", res);
-        }
-
         return {
           type: "url",
           mode: this.mode,
@@ -77784,26 +78679,35 @@ var app = (function () {
       ;
 
       _proto.parseGroup = function parseGroup(name, // For error reporting.
-      optional, greediness, breakOnTokenText, mode) {
+      optional, greediness, breakOnTokenText, mode, consumeSpaces) {
+        // Switch to specified mode
         var outerMode = this.mode;
-        var firstToken = this.nextToken;
-        var text = firstToken.text; // Switch to specified mode
 
         if (mode) {
           this.switchMode(mode);
-        }
+        } // Consume spaces if requested, crucially *after* we switch modes,
+        // so that the next non-space token is parsed in the correct mode.
 
-        var groupEnd;
+
+        if (consumeSpaces) {
+          this.consumeSpaces();
+        } // Get first token
+
+
+        var firstToken = this.fetch();
+        var text = firstToken.text;
         var result; // Try to parse an open brace or \begingroup
 
         if (optional ? text === "[" : text === "{" || text === "\\begingroup") {
-          groupEnd = Parser.endOfGroup[text]; // Start a new group namespace
+          this.consume();
+          var groupEnd = Parser.endOfGroup[text]; // Start a new group namespace
 
           this.gullet.beginGroup(); // If we get a brace, parse an expression
 
-          this.consume();
           var expression = this.parseExpression(false, groupEnd);
-          var lastToken = this.nextToken; // End group namespace before consuming symbol after close brace
+          var lastToken = this.fetch(); // Check that we got a matching closing brace
+
+          this.expect(groupEnd); // End group namespace
 
           this.gullet.endGroup();
           result = {
@@ -77830,18 +78734,14 @@ var app = (function () {
               throw new src_ParseError("Undefined control sequence: " + text, firstToken);
             }
 
-            result = this.handleUnsupportedCmd();
+            result = this.formatUnsupportedCmd(text);
+            this.consume();
           }
         } // Switch mode back
 
 
         if (mode) {
           this.switchMode(outerMode);
-        } // Make sure we got a close brace
-
-
-        if (groupEnd) {
-          this.expect(groupEnd);
         }
 
         return result;
@@ -77897,12 +78797,12 @@ var app = (function () {
       }
       /**
        * Parse a single symbol out of the string. Here, we handle single character
-       * symbols and special functions like verbatim
+       * symbols and special functions like \verb.
        */
       ;
 
       _proto.parseSymbol = function parseSymbol() {
-        var nucleus = this.nextToken;
+        var nucleus = this.fetch();
         var text = nucleus.text;
 
         if (/^\\verb[^a-zA-Z]/.test(text)) {
@@ -77995,11 +78895,18 @@ var app = (function () {
             } else if (this.mode === "math") {
               this.settings.reportNonstrict("unicodeTextInMathMode", "Unicode text character \"" + text[0] + "\" used in math mode", nucleus);
             }
-          }
+          } // All nonmathematical Unicode characters are rendered as if they
+          // are in text mode (wrapped in \text) because that's what it
+          // takes to render them in LaTeX.  Setting `mode: this.mode` is
+          // another natural choice (the user requested math mode), but
+          // this makes it more difficult for getCharacterMetrics() to
+          // distinguish Unicode characters without metrics and those for
+          // which we want to simulate the letter M.
+
 
           symbol = {
             type: "textord",
-            mode: this.mode,
+            mode: "text",
             loc: SourceLocation.range(nucleus),
             text: text
           };
@@ -78157,7 +79064,7 @@ var app = (function () {
 
 
     var katex_generateParseTree = function generateParseTree(expression, options) {
-      var settings = new src_Settings(options);
+      var settings = new Settings_Settings(options);
       return src_parseTree(expression, settings);
     };
     /**
@@ -78184,7 +79091,7 @@ var app = (function () {
 
 
     var katex_renderToDomTree = function renderToDomTree(expression, options) {
-      var settings = new src_Settings(options);
+      var settings = new Settings_Settings(options);
 
       try {
         var tree = src_parseTree(expression, settings);
@@ -78200,7 +79107,7 @@ var app = (function () {
 
 
     var katex_renderToHTMLTree = function renderToHTMLTree(expression, options) {
-      var settings = new src_Settings(options);
+      var settings = new Settings_Settings(options);
 
       try {
         var tree = src_parseTree(expression, settings);
@@ -78214,7 +79121,7 @@ var app = (function () {
       /**
        * Current KaTeX version
        */
-      version: "0.10.2",
+      version: "0.11.1",
 
       /**
        * Renders the given LaTeX into an HTML+MathML combination, and adds
@@ -78315,68 +79222,65 @@ var app = (function () {
 
     var katex$1 = unwrapExports(katex);
 
-    /* src/components/MathTexRenderer/MathTexRenderer.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/MathTexRenderer/MathTexRenderer.svelte generated by Svelte v3.16.4 */
     const file$1 = "src/components/MathTexRenderer/MathTexRenderer.svelte";
 
     // (12:0) {#if rendered && tex !== 'undefined'}
     function create_if_block(ctx) {
-    	var span;
+    	let span;
 
-    	return {
+    	const block = {
     		c: function create() {
     			span = element("span");
-    			attr(span, "class", ctx.className);
+    			attr_dev(span, "class", /*className*/ ctx[1]);
     			add_location(span, file$1, 12, 4, 193);
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, span, anchor);
-    			span.innerHTML = ctx.rendered;
+    			insert_dev(target, span, anchor);
+    			span.innerHTML = /*rendered*/ ctx[2];
     		},
-
-    		p: function update(changed, ctx) {
-    			if (changed.rendered) {
-    				span.innerHTML = ctx.rendered;
-    			}
-
-    			if (changed.className) {
-    				attr(span, "class", ctx.className);
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*rendered*/ 4) span.innerHTML = /*rendered*/ ctx[2];
+    			if (dirty[0] & /*className*/ 2) {
+    				attr_dev(span, "class", /*className*/ ctx[1]);
     			}
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(span);
-    			}
+    			if (detaching) detach_dev(span);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block.name,
+    		type: "if",
+    		source: "(12:0) {#if rendered && tex !== 'undefined'}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$1(ctx) {
-    	var if_block_anchor;
+    	let if_block_anchor;
+    	let if_block = /*rendered*/ ctx[2] && /*tex*/ ctx[0] !== "undefined" && create_if_block(ctx);
 
-    	var if_block = (ctx.rendered && ctx.tex !== 'undefined') && create_if_block(ctx);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if (if_block) if_block.c();
     			if_block_anchor = empty();
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
     			if (if_block) if_block.m(target, anchor);
-    			insert(target, if_block_anchor, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
     		},
-
-    		p: function update(changed, ctx) {
-    			if (ctx.rendered && ctx.tex !== 'undefined') {
+    		p: function update(ctx, dirty) {
+    			if (/*rendered*/ ctx[2] && /*tex*/ ctx[0] !== "undefined") {
     				if (if_block) {
-    					if_block.p(changed, ctx);
+    					if_block.p(ctx, dirty);
     				} else {
     					if_block = create_if_block(ctx);
     					if_block.c();
@@ -78387,50 +79291,76 @@ var app = (function () {
     				if_block = null;
     			}
     		},
-
     		i: noop,
     		o: noop,
-
     		d: function destroy(detaching) {
     			if (if_block) if_block.d(detaching);
-
-    			if (detaching) {
-    				detach(if_block_anchor);
-    			}
+    			if (detaching) detach_dev(if_block_anchor);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$1.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$1($$self, $$props, $$invalidate) {
-    	let { tex, className = '' } = $$props;
+    	let { tex } = $$props;
+    	let { className = "" } = $$props;
+    	const writable_props = ["tex", "className"];
 
-    	const writable_props = ['tex', 'className'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<MathTexRenderer> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<MathTexRenderer> was created with unknown prop '${key}'`);
     	});
 
     	$$self.$set = $$props => {
-    		if ('tex' in $$props) $$invalidate('tex', tex = $$props.tex);
-    		if ('className' in $$props) $$invalidate('className', className = $$props.className);
+    		if ("tex" in $$props) $$invalidate(0, tex = $$props.tex);
+    		if ("className" in $$props) $$invalidate(1, className = $$props.className);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return { tex, className, rendered };
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("tex" in $$props) $$invalidate(0, tex = $$props.tex);
+    		if ("className" in $$props) $$invalidate(1, className = $$props.className);
+    		if ("rendered" in $$props) $$invalidate(2, rendered = $$props.rendered);
     	};
 
     	let rendered;
 
-    	$$self.$$.update = ($$dirty = { tex: 1 }) => {
-    		if ($$dirty.tex) { $$invalidate('rendered', rendered = katex$1.renderToString(tex)); }
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty[0] & /*tex*/ 1) {
+    			 $$invalidate(2, rendered = katex$1.renderToString(tex));
+    		}
     	};
 
-    	return { tex, className, rendered };
+    	return [tex, className, rendered];
     }
 
     class MathTexRenderer extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$1, create_fragment$1, safe_not_equal, ["tex", "className"]);
+    		init(this, options, instance$1, create_fragment$1, safe_not_equal, { tex: 0, className: 1 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "MathTexRenderer",
+    			options,
+    			id: create_fragment$1.name
+    		});
 
     		const { ctx } = this.$$;
-    		const props = options.props || {};
-    		if (ctx.tex === undefined && !('tex' in props)) {
+    		const props = options.props || ({});
+
+    		if (/*tex*/ ctx[0] === undefined && !("tex" in props)) {
     			console.warn("<MathTexRenderer> was created without expected prop 'tex'");
     		}
     	}
@@ -78452,30 +79382,29 @@ var app = (function () {
     	}
     }
 
-    /* src/components/MathInputTexRender/MathInputTexRender.svelte generated by Svelte v3.7.1 */
+    /* src/components/MathInputTexRender/MathInputTexRender.svelte generated by Svelte v3.16.4 */
 
-    const get_error_slot_changes = ({ $mathExpressionStore }) => ({ error: $mathExpressionStore });
-    const get_error_slot_context = ({ $mathExpressionStore }) => ({ error: $mathExpressionStore.error });
+    const get_error_slot_changes = dirty => ({
+    	error: dirty[0] & /*$mathExpressionStore*/ 2
+    });
 
-    const get_waiting_slot_changes = () => ({});
-    const get_waiting_slot_context = () => ({});
+    const get_error_slot_context = ctx => ({
+    	error: /*$mathExpressionStore*/ ctx[1].error
+    });
+
+    const get_waiting_slot_changes = dirty => ({});
+    const get_waiting_slot_context = ctx => ({});
 
     // (15:4) {:else}
     function create_else_block(ctx) {
-    	var current;
+    	let current;
+    	const waiting_slot_template = /*$$slots*/ ctx[3].waiting;
+    	const waiting_slot = create_slot(waiting_slot_template, ctx, /*$$scope*/ ctx[2], get_waiting_slot_context);
 
-    	const waiting_slot_template = ctx.$$slots.waiting;
-    	const waiting_slot = create_slot(waiting_slot_template, ctx, get_waiting_slot_context);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if (waiting_slot) waiting_slot.c();
     		},
-
-    		l: function claim(nodes) {
-    			if (waiting_slot) waiting_slot.l(nodes);
-    		},
-
     		m: function mount(target, anchor) {
     			if (waiting_slot) {
     				waiting_slot.m(target, anchor);
@@ -78483,93 +79412,97 @@ var app = (function () {
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if (waiting_slot && waiting_slot.p && changed.$$scope) {
-    				waiting_slot.p(
-    					get_slot_changes(waiting_slot_template, ctx, changed, get_waiting_slot_changes),
-    					get_slot_context(waiting_slot_template, ctx, get_waiting_slot_context)
-    				);
+    		p: function update(ctx, dirty) {
+    			if (waiting_slot && waiting_slot.p && dirty[0] & /*$$scope*/ 4) {
+    				waiting_slot.p(get_slot_context(waiting_slot_template, ctx, /*$$scope*/ ctx[2], get_waiting_slot_context), get_slot_changes(waiting_slot_template, /*$$scope*/ ctx[2], dirty, get_waiting_slot_changes));
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(waiting_slot, local);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(waiting_slot, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if (waiting_slot) waiting_slot.d(detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block.name,
+    		type: "else",
+    		source: "(15:4) {:else}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (13:4) {#if $mathExpressionStore.tex &&  $mathExpressionStore.tex !== 'undefined'}
     function create_if_block_1(ctx) {
-    	var current;
+    	let current;
 
-    	var mathtexrenderer = new MathTexRenderer({
-    		props: { tex: ctx.$mathExpressionStore.tex, className: ctx.className },
-    		$$inline: true
-    	});
+    	const mathtexrenderer = new MathTexRenderer({
+    			props: {
+    				tex: /*$mathExpressionStore*/ ctx[1].tex,
+    				className: /*className*/ ctx[0]
+    			},
+    			$$inline: true
+    		});
 
-    	return {
+    	const block = {
     		c: function create() {
-    			mathtexrenderer.$$.fragment.c();
+    			create_component(mathtexrenderer.$$.fragment);
     		},
-
     		m: function mount(target, anchor) {
     			mount_component(mathtexrenderer, target, anchor);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			var mathtexrenderer_changes = {};
-    			if (changed.$mathExpressionStore) mathtexrenderer_changes.tex = ctx.$mathExpressionStore.tex;
-    			if (changed.className) mathtexrenderer_changes.className = ctx.className;
+    		p: function update(ctx, dirty) {
+    			const mathtexrenderer_changes = {};
+    			if (dirty[0] & /*$mathExpressionStore*/ 2) mathtexrenderer_changes.tex = /*$mathExpressionStore*/ ctx[1].tex;
+    			if (dirty[0] & /*className*/ 1) mathtexrenderer_changes.className = /*className*/ ctx[0];
     			mathtexrenderer.$set(mathtexrenderer_changes);
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(mathtexrenderer.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(mathtexrenderer.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			destroy_component(mathtexrenderer, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1.name,
+    		type: "if",
+    		source: "(13:4) {#if $mathExpressionStore.tex &&  $mathExpressionStore.tex !== 'undefined'}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (20:0) {#if $mathExpressionStore.error}
     function create_if_block$1(ctx) {
-    	var current;
+    	let current;
+    	const error_slot_template = /*$$slots*/ ctx[3].error;
+    	const error_slot = create_slot(error_slot_template, ctx, /*$$scope*/ ctx[2], get_error_slot_context);
 
-    	const error_slot_template = ctx.$$slots.error;
-    	const error_slot = create_slot(error_slot_template, ctx, get_error_slot_context);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if (error_slot) error_slot.c();
     		},
-
-    		l: function claim(nodes) {
-    			if (error_slot) error_slot.l(nodes);
-    		},
-
     		m: function mount(target, anchor) {
     			if (error_slot) {
     				error_slot.m(target, anchor);
@@ -78577,97 +79510,99 @@ var app = (function () {
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if (error_slot && error_slot.p && (changed.$$scope || changed.$mathExpressionStore)) {
-    				error_slot.p(
-    					get_slot_changes(error_slot_template, ctx, changed, get_error_slot_changes),
-    					get_slot_context(error_slot_template, ctx, get_error_slot_context)
-    				);
+    		p: function update(ctx, dirty) {
+    			if (error_slot && error_slot.p && dirty[0] & /*$$scope, $mathExpressionStore*/ 6) {
+    				error_slot.p(get_slot_context(error_slot_template, ctx, /*$$scope*/ ctx[2], get_error_slot_context), get_slot_changes(error_slot_template, /*$$scope*/ ctx[2], dirty, get_error_slot_changes));
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(error_slot, local);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(error_slot, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if (error_slot) error_slot.d(detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$1.name,
+    		type: "if",
+    		source: "(20:0) {#if $mathExpressionStore.error}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$2(ctx) {
-    	var current_block_type_index, if_block0, t, if_block1_anchor, current;
+    	let current_block_type_index;
+    	let if_block0;
+    	let t;
+    	let if_block1_anchor;
+    	let current;
+    	const if_block_creators = [create_if_block_1, create_else_block];
+    	const if_blocks = [];
 
-    	var if_block_creators = [
-    		create_if_block_1,
-    		create_else_block
-    	];
-
-    	var if_blocks = [];
-
-    	function select_block_type(ctx) {
-    		if (ctx.$mathExpressionStore.tex &&  ctx.$mathExpressionStore.tex !== 'undefined') return 0;
+    	function select_block_type(ctx, dirty) {
+    		if (/*$mathExpressionStore*/ ctx[1].tex && /*$mathExpressionStore*/ ctx[1].tex !== "undefined") return 0;
     		return 1;
     	}
 
     	current_block_type_index = select_block_type(ctx);
     	if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
+    	let if_block1 = /*$mathExpressionStore*/ ctx[1].error && create_if_block$1(ctx);
 
-    	var if_block1 = (ctx.$mathExpressionStore.error) && create_if_block$1(ctx);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if_block0.c();
     			t = space();
     			if (if_block1) if_block1.c();
     			if_block1_anchor = empty();
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
     			if_blocks[current_block_type_index].m(target, anchor);
-    			insert(target, t, anchor);
+    			insert_dev(target, t, anchor);
     			if (if_block1) if_block1.m(target, anchor);
-    			insert(target, if_block1_anchor, anchor);
+    			insert_dev(target, if_block1_anchor, anchor);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			var previous_block_index = current_block_type_index;
+    		p: function update(ctx, dirty) {
+    			let previous_block_index = current_block_type_index;
     			current_block_type_index = select_block_type(ctx);
+
     			if (current_block_type_index === previous_block_index) {
-    				if_blocks[current_block_type_index].p(changed, ctx);
+    				if_blocks[current_block_type_index].p(ctx, dirty);
     			} else {
     				group_outros();
+
     				transition_out(if_blocks[previous_block_index], 1, 1, () => {
     					if_blocks[previous_block_index] = null;
     				});
-    				check_outros();
 
+    				check_outros();
     				if_block0 = if_blocks[current_block_type_index];
+
     				if (!if_block0) {
     					if_block0 = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
     					if_block0.c();
     				}
+
     				transition_in(if_block0, 1);
     				if_block0.m(t.parentNode, t);
     			}
 
-    			if (ctx.$mathExpressionStore.error) {
+    			if (/*$mathExpressionStore*/ ctx[1].error) {
     				if (if_block1) {
-    					if_block1.p(changed, ctx);
+    					if_block1.p(ctx, dirty);
     					transition_in(if_block1, 1);
     				} else {
     					if_block1 = create_if_block$1(ctx);
@@ -78677,76 +79612,85 @@ var app = (function () {
     				}
     			} else if (if_block1) {
     				group_outros();
+
     				transition_out(if_block1, 1, 1, () => {
     					if_block1 = null;
     				});
+
     				check_outros();
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(if_block0);
     			transition_in(if_block1);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(if_block0);
     			transition_out(if_block1);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if_blocks[current_block_type_index].d(detaching);
-
-    			if (detaching) {
-    				detach(t);
-    			}
-
+    			if (detaching) detach_dev(t);
     			if (if_block1) if_block1.d(detaching);
-
-    			if (detaching) {
-    				detach(if_block1_anchor);
-    			}
+    			if (detaching) detach_dev(if_block1_anchor);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$2.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$2($$self, $$props, $$invalidate) {
     	let $mathExpressionStore;
+    	validate_store(mathExpressionStore, "mathExpressionStore");
+    	component_subscribe($$self, mathExpressionStore, $$value => $$invalidate(1, $mathExpressionStore = $$value));
+    	let { className = "" } = $$props;
+    	const writable_props = ["className"];
 
-    	validate_store(mathExpressionStore, 'mathExpressionStore');
-    	component_subscribe($$self, mathExpressionStore, $$value => { $mathExpressionStore = $$value; $$invalidate('$mathExpressionStore', $mathExpressionStore); });
-
-    	
-
-        let { className = '' } = $$props;
-
-    	const writable_props = ['className'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<MathInputTexRender> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<MathInputTexRender> was created with unknown prop '${key}'`);
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
 
     	$$self.$set = $$props => {
-    		if ('className' in $$props) $$invalidate('className', className = $$props.className);
-    		if ('$$scope' in $$props) $$invalidate('$$scope', $$scope = $$props.$$scope);
+    		if ("className" in $$props) $$invalidate(0, className = $$props.className);
+    		if ("$$scope" in $$props) $$invalidate(2, $$scope = $$props.$$scope);
     	};
 
-    	return {
-    		className,
-    		$mathExpressionStore,
-    		$$slots,
-    		$$scope
+    	$$self.$capture_state = () => {
+    		return { className, $mathExpressionStore };
     	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("className" in $$props) $$invalidate(0, className = $$props.className);
+    		if ("$mathExpressionStore" in $$props) mathExpressionStore.set($mathExpressionStore = $$props.$mathExpressionStore);
+    	};
+
+    	return [className, $mathExpressionStore, $$scope, $$slots];
     }
 
     class MathInputTexRender extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$2, create_fragment$2, safe_not_equal, ["className"]);
+    		init(this, options, instance$2, create_fragment$2, safe_not_equal, { className: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "MathInputTexRender",
+    			options,
+    			id: create_fragment$2.name
+    		});
     	}
 
     	get className() {
@@ -78874,35 +79818,30 @@ var app = (function () {
         randomLinkService: globalRandomLinkService
     });
 
-    /* src/components/GenericButton/GenericButton.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/GenericButton/GenericButton.svelte generated by Svelte v3.16.4 */
     const file$2 = "src/components/GenericButton/GenericButton.svelte";
 
     function create_fragment$3(ctx) {
-    	var button, current, dispose;
+    	let button;
+    	let current;
+    	let dispose;
+    	const default_slot_template = /*$$slots*/ ctx[5].default;
+    	const default_slot = create_slot(default_slot_template, ctx, /*$$scope*/ ctx[4], null);
 
-    	const default_slot_template = ctx.$$slots.default;
-    	const default_slot = create_slot(default_slot_template, ctx, null);
-
-    	return {
+    	const block = {
     		c: function create() {
     			button = element("button");
-
     			if (default_slot) default_slot.c();
-
-    			attr(button, "type", ctx.type);
-    			attr(button, "class", ctx.classList);
+    			attr_dev(button, "type", /*type*/ ctx[0]);
+    			attr_dev(button, "class", /*classList*/ ctx[1]);
     			add_location(button, file$2, 16, 0, 281);
-    			dispose = listen(button, "click", ctx.handleClick);
+    			dispose = listen_dev(button, "click", /*handleClick*/ ctx[2], false, false, false);
     		},
-
     		l: function claim(nodes) {
-    			if (default_slot) default_slot.l(button_nodes);
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, button, anchor);
+    			insert_dev(target, button, anchor);
 
     			if (default_slot) {
     				default_slot.m(button, null);
@@ -78910,82 +79849,93 @@ var app = (function () {
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if (default_slot && default_slot.p && changed.$$scope) {
-    				default_slot.p(
-    					get_slot_changes(default_slot_template, ctx, changed, null),
-    					get_slot_context(default_slot_template, ctx, null)
-    				);
+    		p: function update(ctx, dirty) {
+    			if (default_slot && default_slot.p && dirty[0] & /*$$scope*/ 16) {
+    				default_slot.p(get_slot_context(default_slot_template, ctx, /*$$scope*/ ctx[4], null), get_slot_changes(default_slot_template, /*$$scope*/ ctx[4], dirty, null));
     			}
 
-    			if (!current || changed.type) {
-    				attr(button, "type", ctx.type);
+    			if (!current || dirty[0] & /*type*/ 1) {
+    				attr_dev(button, "type", /*type*/ ctx[0]);
     			}
 
-    			if (!current || changed.classList) {
-    				attr(button, "class", ctx.classList);
+    			if (!current || dirty[0] & /*classList*/ 2) {
+    				attr_dev(button, "class", /*classList*/ ctx[1]);
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(default_slot, local);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(default_slot, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(button);
-    			}
-
+    			if (detaching) detach_dev(button);
     			if (default_slot) default_slot.d(detaching);
     			dispose();
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$3.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$3($$self, $$props, $$invalidate) {
-    	let { type = 'button', classList = '' } = $$props;
+    	let { type = "button" } = $$props;
+    	let { classList = "" } = $$props;
+    	const dispatch = createEventDispatcher();
 
-        const dispatch = createEventDispatcher();
+    	function handleClick(evt) {
+    		evt.preventDefault();
+    		dispatch("click");
+    	}
 
-        function handleClick(evt) {
-            evt.preventDefault();
-            dispatch('click');
-        }
+    	const writable_props = ["type", "classList"];
 
-    	const writable_props = ['type', 'classList'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<GenericButton> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<GenericButton> was created with unknown prop '${key}'`);
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
 
     	$$self.$set = $$props => {
-    		if ('type' in $$props) $$invalidate('type', type = $$props.type);
-    		if ('classList' in $$props) $$invalidate('classList', classList = $$props.classList);
-    		if ('$$scope' in $$props) $$invalidate('$$scope', $$scope = $$props.$$scope);
+    		if ("type" in $$props) $$invalidate(0, type = $$props.type);
+    		if ("classList" in $$props) $$invalidate(1, classList = $$props.classList);
+    		if ("$$scope" in $$props) $$invalidate(4, $$scope = $$props.$$scope);
     	};
 
-    	return {
-    		type,
-    		classList,
-    		handleClick,
-    		$$slots,
-    		$$scope
+    	$$self.$capture_state = () => {
+    		return { type, classList };
     	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("type" in $$props) $$invalidate(0, type = $$props.type);
+    		if ("classList" in $$props) $$invalidate(1, classList = $$props.classList);
+    	};
+
+    	return [type, classList, handleClick, dispatch, $$scope, $$slots];
     }
 
     class GenericButton extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$3, create_fragment$3, safe_not_equal, ["type", "classList"]);
+    		init(this, options, instance$3, create_fragment$3, safe_not_equal, { type: 0, classList: 1 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "GenericButton",
+    			options,
+    			id: create_fragment$3.name
+    		});
     	}
 
     	get type() {
@@ -79005,111 +79955,123 @@ var app = (function () {
     	}
     }
 
-    /* src/components/MathButton/MathButton.svelte generated by Svelte v3.7.1 */
+    /* src/components/MathButton/MathButton.svelte generated by Svelte v3.16.4 */
 
     // (12:0) <GenericButton on:click classList={`${color} p-4 rounded-none ${classList}`}>
     function create_default_slot(ctx) {
-    	var current;
+    	let current;
 
-    	var mathtexrenderer = new MathTexRenderer({
-    		props: { tex: ctx.tex },
-    		$$inline: true
-    	});
+    	const mathtexrenderer = new MathTexRenderer({
+    			props: { tex: /*tex*/ ctx[0] },
+    			$$inline: true
+    		});
 
-    	return {
+    	const block = {
     		c: function create() {
-    			mathtexrenderer.$$.fragment.c();
+    			create_component(mathtexrenderer.$$.fragment);
     		},
-
     		m: function mount(target, anchor) {
     			mount_component(mathtexrenderer, target, anchor);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			var mathtexrenderer_changes = {};
-    			if (changed.tex) mathtexrenderer_changes.tex = ctx.tex;
+    		p: function update(ctx, dirty) {
+    			const mathtexrenderer_changes = {};
+    			if (dirty[0] & /*tex*/ 1) mathtexrenderer_changes.tex = /*tex*/ ctx[0];
     			mathtexrenderer.$set(mathtexrenderer_changes);
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(mathtexrenderer.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(mathtexrenderer.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			destroy_component(mathtexrenderer, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot.name,
+    		type: "slot",
+    		source: "(12:0) <GenericButton on:click classList={`${color} p-4 rounded-none ${classList}`}>",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$4(ctx) {
-    	var current;
+    	let current;
 
-    	var genericbutton = new GenericButton({
-    		props: {
-    		classList: `${ctx.color} p-4 rounded-none ${ctx.classList}`,
-    		$$slots: { default: [create_default_slot] },
-    		$$scope: { ctx }
-    	},
-    		$$inline: true
-    	});
-    	genericbutton.$on("click", ctx.click_handler);
+    	const genericbutton = new GenericButton({
+    			props: {
+    				classList: `${/*color*/ ctx[1]} p-4 rounded-none ${/*classList*/ ctx[2]}`,
+    				$$slots: { default: [create_default_slot] },
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
 
-    	return {
+    	genericbutton.$on("click", /*click_handler*/ ctx[3]);
+
+    	const block = {
     		c: function create() {
-    			genericbutton.$$.fragment.c();
+    			create_component(genericbutton.$$.fragment);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
     			mount_component(genericbutton, target, anchor);
     			current = true;
     		},
+    		p: function update(ctx, dirty) {
+    			const genericbutton_changes = {};
+    			if (dirty[0] & /*color, classList*/ 6) genericbutton_changes.classList = `${/*color*/ ctx[1]} p-4 rounded-none ${/*classList*/ ctx[2]}`;
 
-    		p: function update(changed, ctx) {
-    			var genericbutton_changes = {};
-    			if (changed.color || changed.classList) genericbutton_changes.classList = `${ctx.color} p-4 rounded-none ${ctx.classList}`;
-    			if (changed.$$scope || changed.tex) genericbutton_changes.$$scope = { changed, ctx };
+    			if (dirty[0] & /*$$scope, tex*/ 17) {
+    				genericbutton_changes.$$scope = { dirty, ctx };
+    			}
+
     			genericbutton.$set(genericbutton_changes);
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(genericbutton.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(genericbutton.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			destroy_component(genericbutton, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$4.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$4($$self, $$props, $$invalidate) {
-    	
+    	let { tex } = $$props;
+    	let { color = "bg-gray-100 hover:bg-gray-300" } = $$props;
+    	let { classList = "" } = $$props;
+    	const writable_props = ["tex", "color", "classList"];
 
-        let { tex, color = 'bg-gray-100 hover:bg-gray-300', classList = '' } = $$props;
-
-    	const writable_props = ['tex', 'color', 'classList'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<MathButton> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<MathButton> was created with unknown prop '${key}'`);
     	});
 
     	function click_handler(event) {
@@ -79117,22 +80079,40 @@ var app = (function () {
     	}
 
     	$$self.$set = $$props => {
-    		if ('tex' in $$props) $$invalidate('tex', tex = $$props.tex);
-    		if ('color' in $$props) $$invalidate('color', color = $$props.color);
-    		if ('classList' in $$props) $$invalidate('classList', classList = $$props.classList);
+    		if ("tex" in $$props) $$invalidate(0, tex = $$props.tex);
+    		if ("color" in $$props) $$invalidate(1, color = $$props.color);
+    		if ("classList" in $$props) $$invalidate(2, classList = $$props.classList);
     	};
 
-    	return { tex, color, classList, click_handler };
+    	$$self.$capture_state = () => {
+    		return { tex, color, classList };
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("tex" in $$props) $$invalidate(0, tex = $$props.tex);
+    		if ("color" in $$props) $$invalidate(1, color = $$props.color);
+    		if ("classList" in $$props) $$invalidate(2, classList = $$props.classList);
+    	};
+
+    	return [tex, color, classList, click_handler];
     }
 
     class MathButton extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$4, create_fragment$4, safe_not_equal, ["tex", "color", "classList"]);
+    		init(this, options, instance$4, create_fragment$4, safe_not_equal, { tex: 0, color: 1, classList: 2 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "MathButton",
+    			options,
+    			id: create_fragment$4.name
+    		});
 
     		const { ctx } = this.$$;
-    		const props = options.props || {};
-    		if (ctx.tex === undefined && !('tex' in props)) {
+    		const props = options.props || ({});
+
+    		if (/*tex*/ ctx[0] === undefined && !("tex" in props)) {
     			console.warn("<MathButton> was created without expected prop 'tex'");
     		}
     	}
@@ -79257,731 +80237,739 @@ var app = (function () {
         [CALC_OPERATION.I]: () => ' i ',
     };
 
-    /* src/components/MathButtonPanel/MathButtonPanel.svelte generated by Svelte v3.7.1 */
-    const { console: console_1 } = globals;
+    /* src/components/MathButtonPanel/MathButtonPanel.svelte generated by Svelte v3.16.4 */
 
+    const { console: console_1 } = globals;
     const file$3 = "src/components/MathButtonPanel/MathButtonPanel.svelte";
 
     function create_fragment$5(ctx) {
-    	var div, t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11, t12, t13, t14, t15, t16, t17, t18, t19, t20, t21, t22, t23, t24, t25, t26, t27, t28, t29, t30, t31, t32, t33, t34, t35, t36, t37, t38, t39, t40, t41, t42, t43, div_class_value, current;
+    	let div;
+    	let t0;
+    	let t1;
+    	let t2;
+    	let t3;
+    	let t4;
+    	let t5;
+    	let t6;
+    	let t7;
+    	let t8;
+    	let t9;
+    	let t10;
+    	let t11;
+    	let t12;
+    	let t13;
+    	let t14;
+    	let t15;
+    	let t16;
+    	let t17;
+    	let t18;
+    	let t19;
+    	let t20;
+    	let t21;
+    	let t22;
+    	let t23;
+    	let t24;
+    	let t25;
+    	let t26;
+    	let t27;
+    	let t28;
+    	let t29;
+    	let t30;
+    	let t31;
+    	let t32;
+    	let t33;
+    	let t34;
+    	let t35;
+    	let t36;
+    	let t37;
+    	let t38;
+    	let t39;
+    	let t40;
+    	let t41;
+    	let t42;
+    	let t43;
+    	let div_class_value;
+    	let current;
 
-    	var mathbutton0 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__open-paren',
-    		tex: '('
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton0 = new MathButton({
+    			props: {
+    				classList: "calc-btn__open-paren",
+    				tex: "("
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton0.$on("click", applyTransform(CALC_OPERATION.OPEN_PAREN));
 
-    	var mathbutton1 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__close-paren',
-    		tex: ')'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton1 = new MathButton({
+    			props: {
+    				classList: "calc-btn__close-paren",
+    				tex: ")"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton1.$on("click", applyTransform(CALC_OPERATION.CLOSE_PAREN));
 
-    	var mathbutton2 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__wrap-paren',
-    		tex: '(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton2 = new MathButton({
+    			props: {
+    				classList: "calc-btn__wrap-paren",
+    				tex: "(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton2.$on("click", applyTransform(CALC_OPERATION.WRAP_PAREN));
 
-    	var mathbutton3 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__x',
-    		tex: 'x'
-    	},
-    		$$inline: true
-    	});
-    	mathbutton3.$on("click", ctx.click_handler);
+    	const mathbutton3 = new MathButton({
+    			props: { classList: "calc-btn__x", tex: "x" },
+    			$$inline: true
+    		});
 
-    	var mathbutton4 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__y',
-    		tex: 'y'
-    	},
-    		$$inline: true
-    	});
-    	mathbutton4.$on("click", ctx.click_handler_1);
+    	mathbutton3.$on("click", /*click_handler*/ ctx[4]);
 
-    	var mathbutton5 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__z',
-    		tex: 'z'
-    	},
-    		$$inline: true
-    	});
-    	mathbutton5.$on("click", ctx.click_handler_2);
+    	const mathbutton4 = new MathButton({
+    			props: { classList: "calc-btn__y", tex: "y" },
+    			$$inline: true
+    		});
 
-    	var mathbutton6 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__pi',
-    		tex: '\\pi'
-    	},
-    		$$inline: true
-    	});
+    	mathbutton4.$on("click", /*click_handler_1*/ ctx[5]);
+
+    	const mathbutton5 = new MathButton({
+    			props: { classList: "calc-btn__z", tex: "z" },
+    			$$inline: true
+    		});
+
+    	mathbutton5.$on("click", /*click_handler_2*/ ctx[6]);
+
+    	const mathbutton6 = new MathButton({
+    			props: { classList: "calc-btn__pi", tex: "\\pi" },
+    			$$inline: true
+    		});
+
     	mathbutton6.$on("click", applyTransform(CALC_OPERATION.PI));
 
-    	var mathbutton7 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__e',
-    		tex: 'e'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton7 = new MathButton({
+    			props: { classList: "calc-btn__e", tex: "e" },
+    			$$inline: true
+    		});
+
     	mathbutton7.$on("click", applyTransform(CALC_OPERATION.E));
 
-    	var mathbutton8 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__i',
-    		tex: 'i'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton8 = new MathButton({
+    			props: { classList: "calc-btn__i", tex: "i" },
+    			$$inline: true
+    		});
+
     	mathbutton8.$on("click", applyTransform(CALC_OPERATION.I));
 
-    	var mathbutton9 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__1',
-    		tex: '1',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton9 = new MathButton({
+    			props: {
+    				classList: "calc-btn__1",
+    				tex: "1",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton9.$on("click", applyTransform(CALC_OPERATION.ONE));
 
-    	var mathbutton10 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__2',
-    		tex: '2',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton10 = new MathButton({
+    			props: {
+    				classList: "calc-btn__2",
+    				tex: "2",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton10.$on("click", applyTransform(CALC_OPERATION.TWO));
 
-    	var mathbutton11 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__3',
-    		tex: '3',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton11 = new MathButton({
+    			props: {
+    				classList: "calc-btn__3",
+    				tex: "3",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton11.$on("click", applyTransform(CALC_OPERATION.THREE));
 
-    	var mathbutton12 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__4',
-    		tex: '4',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton12 = new MathButton({
+    			props: {
+    				classList: "calc-btn__4",
+    				tex: "4",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton12.$on("click", applyTransform(CALC_OPERATION.FOUR));
 
-    	var mathbutton13 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__5',
-    		tex: '5',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton13 = new MathButton({
+    			props: {
+    				classList: "calc-btn__5",
+    				tex: "5",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton13.$on("click", applyTransform(CALC_OPERATION.FIVE));
 
-    	var mathbutton14 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__6',
-    		tex: '6',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton14 = new MathButton({
+    			props: {
+    				classList: "calc-btn__6",
+    				tex: "6",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton14.$on("click", applyTransform(CALC_OPERATION.SIX));
 
-    	var mathbutton15 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__7',
-    		tex: '7',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton15 = new MathButton({
+    			props: {
+    				classList: "calc-btn__7",
+    				tex: "7",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton15.$on("click", applyTransform(CALC_OPERATION.SEVEN));
 
-    	var mathbutton16 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__8',
-    		tex: '8',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton16 = new MathButton({
+    			props: {
+    				classList: "calc-btn__8",
+    				tex: "8",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton16.$on("click", applyTransform(CALC_OPERATION.EIGHT));
 
-    	var mathbutton17 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__9',
-    		tex: '9',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton17 = new MathButton({
+    			props: {
+    				classList: "calc-btn__9",
+    				tex: "9",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton17.$on("click", applyTransform(CALC_OPERATION.NINE));
 
-    	var mathbutton18 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__0',
-    		tex: '0',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton18 = new MathButton({
+    			props: {
+    				classList: "calc-btn__0",
+    				tex: "0",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton18.$on("click", applyTransform(CALC_OPERATION.ZERO));
 
-    	var mathbutton19 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__dec',
-    		tex: '.',
-    		color: "bg-gray-200 hover:bg-gray-400"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton19 = new MathButton({
+    			props: {
+    				classList: "calc-btn__dec",
+    				tex: ".",
+    				color: "bg-gray-200 hover:bg-gray-400"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton19.$on("click", applyTransform(CALC_OPERATION.DECIMAL));
 
-    	var mathbutton20 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__eq',
-    		tex: '=',
-    		color: "bg-orange-200 hover:bg-orange-300"
-    	},
-    		$$inline: true
-    	});
-    	mathbutton20.$on("click", ctx.handleSolveClick);
+    	const mathbutton20 = new MathButton({
+    			props: {
+    				classList: "calc-btn__eq",
+    				tex: "=",
+    				color: "bg-orange-200 hover:bg-orange-300"
+    			},
+    			$$inline: true
+    		});
 
-    	var mathbutton21 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__clr',
-    		tex: 'clear',
-    		color: "bg-red-200 hover:bg-red-300"
-    	},
-    		$$inline: true
-    	});
+    	mathbutton20.$on("click", /*handleSolveClick*/ ctx[1]);
+
+    	const mathbutton21 = new MathButton({
+    			props: {
+    				classList: "calc-btn__clr",
+    				tex: "clear",
+    				color: "bg-red-200 hover:bg-red-300"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton21.$on("click", handleClearClick);
 
-    	var mathbutton22 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__moda',
-    		tex: 'mod_a'
-    	},
-    		$$inline: true
-    	});
-    	mathbutton22.$on("click", ctx.click_handler_3);
+    	const mathbutton22 = new MathButton({
+    			props: {
+    				classList: "calc-btn__moda",
+    				tex: "mod_a"
+    			},
+    			$$inline: true
+    		});
 
-    	var mathbutton23 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__raise10',
-    		tex: '*10^y'
-    	},
-    		$$inline: true
-    	});
+    	mathbutton22.$on("click", /*click_handler_3*/ ctx[7]);
+
+    	const mathbutton23 = new MathButton({
+    			props: {
+    				classList: "calc-btn__raise10",
+    				tex: "*10^y"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton23.$on("click", applyTransform(CALC_OPERATION.RAISE_TEN));
 
-    	var mathbutton24 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__div',
-    		tex: '/',
-    		color: "bg-blue-200 hover:bg-blue-300"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton24 = new MathButton({
+    			props: {
+    				classList: "calc-btn__div",
+    				tex: "/",
+    				color: "bg-blue-200 hover:bg-blue-300"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton24.$on("click", applyTransform(CALC_OPERATION.DIVIDE));
 
-    	var mathbutton25 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__mul',
-    		tex: '*',
-    		color: "bg-blue-200 hover:bg-blue-300"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton25 = new MathButton({
+    			props: {
+    				classList: "calc-btn__mul",
+    				tex: "*",
+    				color: "bg-blue-200 hover:bg-blue-300"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton25.$on("click", applyTransform(CALC_OPERATION.MULTIPLY));
 
-    	var mathbutton26 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__sub',
-    		tex: '-',
-    		color: "bg-blue-200 hover:bg-blue-300"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton26 = new MathButton({
+    			props: {
+    				classList: "calc-btn__sub",
+    				tex: "-",
+    				color: "bg-blue-200 hover:bg-blue-300"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton26.$on("click", applyTransform(CALC_OPERATION.SUBTRACT));
 
-    	var mathbutton27 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__add',
-    		tex: '+',
-    		color: "bg-blue-200 hover:bg-blue-300"
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton27 = new MathButton({
+    			props: {
+    				classList: "calc-btn__add",
+    				tex: "+",
+    				color: "bg-blue-200 hover:bg-blue-300"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton27.$on("click", applyTransform(CALC_OPERATION.ADD));
 
-    	var mathbutton28 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__cos',
-    		tex: 'cos(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton28 = new MathButton({
+    			props: {
+    				classList: "calc-btn__cos",
+    				tex: "cos(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton28.$on("click", applyTransform(CALC_OPERATION.COS));
 
-    	var mathbutton29 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__sin',
-    		tex: 'sin(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton29 = new MathButton({
+    			props: {
+    				classList: "calc-btn__sin",
+    				tex: "sin(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton29.$on("click", applyTransform(CALC_OPERATION.SIN));
 
-    	var mathbutton30 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__tan',
-    		tex: 'tan(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton30 = new MathButton({
+    			props: {
+    				classList: "calc-btn__tan",
+    				tex: "tan(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton30.$on("click", applyTransform(CALC_OPERATION.TAN));
 
-    	var mathbutton31 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__sinh',
-    		tex: 'sinh(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton31 = new MathButton({
+    			props: {
+    				classList: "calc-btn__sinh",
+    				tex: "sinh(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton31.$on("click", applyTransform(CALC_OPERATION.SINH));
 
-    	var mathbutton32 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__cosh',
-    		tex: 'cosh(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton32 = new MathButton({
+    			props: {
+    				classList: "calc-btn__cosh",
+    				tex: "cosh(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton32.$on("click", applyTransform(CALC_OPERATION.COSH));
 
-    	var mathbutton33 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__tanh',
-    		tex: 'tanh(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton33 = new MathButton({
+    			props: {
+    				classList: "calc-btn__tanh",
+    				tex: "tanh(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton33.$on("click", applyTransform(CALC_OPERATION.TANH));
 
-    	var mathbutton34 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__pow-1',
-    		tex: 'x^{-1}'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton34 = new MathButton({
+    			props: {
+    				classList: "calc-btn__pow-1",
+    				tex: "x^{-1}"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton34.$on("click", applyTransform(CALC_OPERATION.POWER_NEGATIVE_ONE));
 
-    	var mathbutton35 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__powy',
-    		tex: 'x^y'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton35 = new MathButton({
+    			props: { classList: "calc-btn__powy", tex: "x^y" },
+    			$$inline: true
+    		});
+
     	mathbutton35.$on("click", applyTransform(CALC_OPERATION.POWER_Y));
 
-    	var mathbutton36 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__pow2',
-    		tex: 'x^2'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton36 = new MathButton({
+    			props: { classList: "calc-btn__pow2", tex: "x^2" },
+    			$$inline: true
+    		});
+
     	mathbutton36.$on("click", applyTransform(CALC_OPERATION.POWER_TWO));
 
-    	var mathbutton37 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__ex',
-    		tex: 'e^x'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton37 = new MathButton({
+    			props: { classList: "calc-btn__ex", tex: "e^x" },
+    			$$inline: true
+    		});
+
     	mathbutton37.$on("click", applyTransform(CALC_OPERATION.TO_EXP));
 
-    	var mathbutton38 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__sqrt',
-    		tex: '\\sqrt{x}'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton38 = new MathButton({
+    			props: {
+    				classList: "calc-btn__sqrt",
+    				tex: "\\sqrt{x}"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton38.$on("click", applyTransform(CALC_OPERATION.SQUARE_ROOT));
 
-    	var mathbutton39 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__fact',
-    		tex: 'x!'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton39 = new MathButton({
+    			props: { classList: "calc-btn__fact", tex: "x!" },
+    			$$inline: true
+    		});
+
     	mathbutton39.$on("click", applyTransform(CALC_OPERATION.FACTORIAL));
 
-    	var mathbutton40 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__abs',
-    		tex: '|x|'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton40 = new MathButton({
+    			props: { classList: "calc-btn__abs", tex: "|x|" },
+    			$$inline: true
+    		});
+
     	mathbutton40.$on("click", applyTransform(CALC_OPERATION.ABS));
 
-    	var mathbutton41 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__loge',
-    		tex: 'log_e(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton41 = new MathButton({
+    			props: {
+    				classList: "calc-btn__loge",
+    				tex: "log_e(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton41.$on("click", applyTransform(CALC_OPERATION.LOG));
 
-    	var mathbutton42 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__log10',
-    		tex: 'log_{10}(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton42 = new MathButton({
+    			props: {
+    				classList: "calc-btn__log10",
+    				tex: "log_{10}(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton42.$on("click", applyTransform(CALC_OPERATION.LOG_B_10));
 
-    	var mathbutton43 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__log2',
-    		tex: 'log_2(x)'
-    	},
-    		$$inline: true
-    	});
+    	const mathbutton43 = new MathButton({
+    			props: {
+    				classList: "calc-btn__log2",
+    				tex: "log_2(x)"
+    			},
+    			$$inline: true
+    		});
+
     	mathbutton43.$on("click", applyTransform(CALC_OPERATION.LG));
 
-    	var mathbutton44 = new MathButton({
-    		props: {
-    		classList: 'calc-btn__logb',
-    		tex: 'log_b(x)'
-    	},
-    		$$inline: true
-    	});
-    	mathbutton44.$on("click", ctx.click_handler_4);
+    	const mathbutton44 = new MathButton({
+    			props: {
+    				classList: "calc-btn__logb",
+    				tex: "log_b(x)"
+    			},
+    			$$inline: true
+    		});
 
-    	return {
+    	mathbutton44.$on("click", /*click_handler_4*/ ctx[8]);
+
+    	const block = {
     		c: function create() {
     			div = element("div");
-    			mathbutton0.$$.fragment.c();
+    			create_component(mathbutton0.$$.fragment);
     			t0 = space();
-    			mathbutton1.$$.fragment.c();
+    			create_component(mathbutton1.$$.fragment);
     			t1 = space();
-    			mathbutton2.$$.fragment.c();
+    			create_component(mathbutton2.$$.fragment);
     			t2 = space();
-    			mathbutton3.$$.fragment.c();
+    			create_component(mathbutton3.$$.fragment);
     			t3 = space();
-    			mathbutton4.$$.fragment.c();
+    			create_component(mathbutton4.$$.fragment);
     			t4 = space();
-    			mathbutton5.$$.fragment.c();
+    			create_component(mathbutton5.$$.fragment);
     			t5 = space();
-    			mathbutton6.$$.fragment.c();
+    			create_component(mathbutton6.$$.fragment);
     			t6 = space();
-    			mathbutton7.$$.fragment.c();
+    			create_component(mathbutton7.$$.fragment);
     			t7 = space();
-    			mathbutton8.$$.fragment.c();
+    			create_component(mathbutton8.$$.fragment);
     			t8 = space();
-    			mathbutton9.$$.fragment.c();
+    			create_component(mathbutton9.$$.fragment);
     			t9 = space();
-    			mathbutton10.$$.fragment.c();
+    			create_component(mathbutton10.$$.fragment);
     			t10 = space();
-    			mathbutton11.$$.fragment.c();
+    			create_component(mathbutton11.$$.fragment);
     			t11 = space();
-    			mathbutton12.$$.fragment.c();
+    			create_component(mathbutton12.$$.fragment);
     			t12 = space();
-    			mathbutton13.$$.fragment.c();
+    			create_component(mathbutton13.$$.fragment);
     			t13 = space();
-    			mathbutton14.$$.fragment.c();
+    			create_component(mathbutton14.$$.fragment);
     			t14 = space();
-    			mathbutton15.$$.fragment.c();
+    			create_component(mathbutton15.$$.fragment);
     			t15 = space();
-    			mathbutton16.$$.fragment.c();
+    			create_component(mathbutton16.$$.fragment);
     			t16 = space();
-    			mathbutton17.$$.fragment.c();
+    			create_component(mathbutton17.$$.fragment);
     			t17 = space();
-    			mathbutton18.$$.fragment.c();
+    			create_component(mathbutton18.$$.fragment);
     			t18 = space();
-    			mathbutton19.$$.fragment.c();
+    			create_component(mathbutton19.$$.fragment);
     			t19 = space();
-    			mathbutton20.$$.fragment.c();
+    			create_component(mathbutton20.$$.fragment);
     			t20 = space();
-    			mathbutton21.$$.fragment.c();
+    			create_component(mathbutton21.$$.fragment);
     			t21 = space();
-    			mathbutton22.$$.fragment.c();
+    			create_component(mathbutton22.$$.fragment);
     			t22 = space();
-    			mathbutton23.$$.fragment.c();
+    			create_component(mathbutton23.$$.fragment);
     			t23 = space();
-    			mathbutton24.$$.fragment.c();
+    			create_component(mathbutton24.$$.fragment);
     			t24 = space();
-    			mathbutton25.$$.fragment.c();
+    			create_component(mathbutton25.$$.fragment);
     			t25 = space();
-    			mathbutton26.$$.fragment.c();
+    			create_component(mathbutton26.$$.fragment);
     			t26 = space();
-    			mathbutton27.$$.fragment.c();
+    			create_component(mathbutton27.$$.fragment);
     			t27 = space();
-    			mathbutton28.$$.fragment.c();
+    			create_component(mathbutton28.$$.fragment);
     			t28 = space();
-    			mathbutton29.$$.fragment.c();
+    			create_component(mathbutton29.$$.fragment);
     			t29 = space();
-    			mathbutton30.$$.fragment.c();
+    			create_component(mathbutton30.$$.fragment);
     			t30 = space();
-    			mathbutton31.$$.fragment.c();
+    			create_component(mathbutton31.$$.fragment);
     			t31 = space();
-    			mathbutton32.$$.fragment.c();
+    			create_component(mathbutton32.$$.fragment);
     			t32 = space();
-    			mathbutton33.$$.fragment.c();
+    			create_component(mathbutton33.$$.fragment);
     			t33 = space();
-    			mathbutton34.$$.fragment.c();
+    			create_component(mathbutton34.$$.fragment);
     			t34 = space();
-    			mathbutton35.$$.fragment.c();
+    			create_component(mathbutton35.$$.fragment);
     			t35 = space();
-    			mathbutton36.$$.fragment.c();
+    			create_component(mathbutton36.$$.fragment);
     			t36 = space();
-    			mathbutton37.$$.fragment.c();
+    			create_component(mathbutton37.$$.fragment);
     			t37 = space();
-    			mathbutton38.$$.fragment.c();
+    			create_component(mathbutton38.$$.fragment);
     			t38 = space();
-    			mathbutton39.$$.fragment.c();
+    			create_component(mathbutton39.$$.fragment);
     			t39 = space();
-    			mathbutton40.$$.fragment.c();
+    			create_component(mathbutton40.$$.fragment);
     			t40 = space();
-    			mathbutton41.$$.fragment.c();
+    			create_component(mathbutton41.$$.fragment);
     			t41 = space();
-    			mathbutton42.$$.fragment.c();
+    			create_component(mathbutton42.$$.fragment);
     			t42 = space();
-    			mathbutton43.$$.fragment.c();
+    			create_component(mathbutton43.$$.fragment);
     			t43 = space();
-    			mathbutton44.$$.fragment.c();
-    			attr(div, "class", div_class_value = "calculator-panel " + ctx.className);
+    			create_component(mathbutton44.$$.fragment);
+    			attr_dev(div, "class", div_class_value = "calculator-panel " + /*className*/ ctx[0]);
     			add_location(div, file$3, 43, 0, 1403);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, div, anchor);
+    			insert_dev(target, div, anchor);
     			mount_component(mathbutton0, div, null);
-    			append(div, t0);
+    			append_dev(div, t0);
     			mount_component(mathbutton1, div, null);
-    			append(div, t1);
+    			append_dev(div, t1);
     			mount_component(mathbutton2, div, null);
-    			append(div, t2);
+    			append_dev(div, t2);
     			mount_component(mathbutton3, div, null);
-    			append(div, t3);
+    			append_dev(div, t3);
     			mount_component(mathbutton4, div, null);
-    			append(div, t4);
+    			append_dev(div, t4);
     			mount_component(mathbutton5, div, null);
-    			append(div, t5);
+    			append_dev(div, t5);
     			mount_component(mathbutton6, div, null);
-    			append(div, t6);
+    			append_dev(div, t6);
     			mount_component(mathbutton7, div, null);
-    			append(div, t7);
+    			append_dev(div, t7);
     			mount_component(mathbutton8, div, null);
-    			append(div, t8);
+    			append_dev(div, t8);
     			mount_component(mathbutton9, div, null);
-    			append(div, t9);
+    			append_dev(div, t9);
     			mount_component(mathbutton10, div, null);
-    			append(div, t10);
+    			append_dev(div, t10);
     			mount_component(mathbutton11, div, null);
-    			append(div, t11);
+    			append_dev(div, t11);
     			mount_component(mathbutton12, div, null);
-    			append(div, t12);
+    			append_dev(div, t12);
     			mount_component(mathbutton13, div, null);
-    			append(div, t13);
+    			append_dev(div, t13);
     			mount_component(mathbutton14, div, null);
-    			append(div, t14);
+    			append_dev(div, t14);
     			mount_component(mathbutton15, div, null);
-    			append(div, t15);
+    			append_dev(div, t15);
     			mount_component(mathbutton16, div, null);
-    			append(div, t16);
+    			append_dev(div, t16);
     			mount_component(mathbutton17, div, null);
-    			append(div, t17);
+    			append_dev(div, t17);
     			mount_component(mathbutton18, div, null);
-    			append(div, t18);
+    			append_dev(div, t18);
     			mount_component(mathbutton19, div, null);
-    			append(div, t19);
+    			append_dev(div, t19);
     			mount_component(mathbutton20, div, null);
-    			append(div, t20);
+    			append_dev(div, t20);
     			mount_component(mathbutton21, div, null);
-    			append(div, t21);
+    			append_dev(div, t21);
     			mount_component(mathbutton22, div, null);
-    			append(div, t22);
+    			append_dev(div, t22);
     			mount_component(mathbutton23, div, null);
-    			append(div, t23);
+    			append_dev(div, t23);
     			mount_component(mathbutton24, div, null);
-    			append(div, t24);
+    			append_dev(div, t24);
     			mount_component(mathbutton25, div, null);
-    			append(div, t25);
+    			append_dev(div, t25);
     			mount_component(mathbutton26, div, null);
-    			append(div, t26);
+    			append_dev(div, t26);
     			mount_component(mathbutton27, div, null);
-    			append(div, t27);
+    			append_dev(div, t27);
     			mount_component(mathbutton28, div, null);
-    			append(div, t28);
+    			append_dev(div, t28);
     			mount_component(mathbutton29, div, null);
-    			append(div, t29);
+    			append_dev(div, t29);
     			mount_component(mathbutton30, div, null);
-    			append(div, t30);
+    			append_dev(div, t30);
     			mount_component(mathbutton31, div, null);
-    			append(div, t31);
+    			append_dev(div, t31);
     			mount_component(mathbutton32, div, null);
-    			append(div, t32);
+    			append_dev(div, t32);
     			mount_component(mathbutton33, div, null);
-    			append(div, t33);
+    			append_dev(div, t33);
     			mount_component(mathbutton34, div, null);
-    			append(div, t34);
+    			append_dev(div, t34);
     			mount_component(mathbutton35, div, null);
-    			append(div, t35);
+    			append_dev(div, t35);
     			mount_component(mathbutton36, div, null);
-    			append(div, t36);
+    			append_dev(div, t36);
     			mount_component(mathbutton37, div, null);
-    			append(div, t37);
+    			append_dev(div, t37);
     			mount_component(mathbutton38, div, null);
-    			append(div, t38);
+    			append_dev(div, t38);
     			mount_component(mathbutton39, div, null);
-    			append(div, t39);
+    			append_dev(div, t39);
     			mount_component(mathbutton40, div, null);
-    			append(div, t40);
+    			append_dev(div, t40);
     			mount_component(mathbutton41, div, null);
-    			append(div, t41);
+    			append_dev(div, t41);
     			mount_component(mathbutton42, div, null);
-    			append(div, t42);
+    			append_dev(div, t42);
     			mount_component(mathbutton43, div, null);
-    			append(div, t43);
+    			append_dev(div, t43);
     			mount_component(mathbutton44, div, null);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if ((!current || changed.className) && div_class_value !== (div_class_value = "calculator-panel " + ctx.className)) {
-    				attr(div, "class", div_class_value);
+    		p: function update(ctx, dirty) {
+    			if (!current || dirty[0] & /*className*/ 1 && div_class_value !== (div_class_value = "calculator-panel " + /*className*/ ctx[0])) {
+    				attr_dev(div, "class", div_class_value);
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(mathbutton0.$$.fragment, local);
-
     			transition_in(mathbutton1.$$.fragment, local);
-
     			transition_in(mathbutton2.$$.fragment, local);
-
     			transition_in(mathbutton3.$$.fragment, local);
-
     			transition_in(mathbutton4.$$.fragment, local);
-
     			transition_in(mathbutton5.$$.fragment, local);
-
     			transition_in(mathbutton6.$$.fragment, local);
-
     			transition_in(mathbutton7.$$.fragment, local);
-
     			transition_in(mathbutton8.$$.fragment, local);
-
     			transition_in(mathbutton9.$$.fragment, local);
-
     			transition_in(mathbutton10.$$.fragment, local);
-
     			transition_in(mathbutton11.$$.fragment, local);
-
     			transition_in(mathbutton12.$$.fragment, local);
-
     			transition_in(mathbutton13.$$.fragment, local);
-
     			transition_in(mathbutton14.$$.fragment, local);
-
     			transition_in(mathbutton15.$$.fragment, local);
-
     			transition_in(mathbutton16.$$.fragment, local);
-
     			transition_in(mathbutton17.$$.fragment, local);
-
     			transition_in(mathbutton18.$$.fragment, local);
-
     			transition_in(mathbutton19.$$.fragment, local);
-
     			transition_in(mathbutton20.$$.fragment, local);
-
     			transition_in(mathbutton21.$$.fragment, local);
-
     			transition_in(mathbutton22.$$.fragment, local);
-
     			transition_in(mathbutton23.$$.fragment, local);
-
     			transition_in(mathbutton24.$$.fragment, local);
-
     			transition_in(mathbutton25.$$.fragment, local);
-
     			transition_in(mathbutton26.$$.fragment, local);
-
     			transition_in(mathbutton27.$$.fragment, local);
-
     			transition_in(mathbutton28.$$.fragment, local);
-
     			transition_in(mathbutton29.$$.fragment, local);
-
     			transition_in(mathbutton30.$$.fragment, local);
-
     			transition_in(mathbutton31.$$.fragment, local);
-
     			transition_in(mathbutton32.$$.fragment, local);
-
     			transition_in(mathbutton33.$$.fragment, local);
-
     			transition_in(mathbutton34.$$.fragment, local);
-
     			transition_in(mathbutton35.$$.fragment, local);
-
     			transition_in(mathbutton36.$$.fragment, local);
-
     			transition_in(mathbutton37.$$.fragment, local);
-
     			transition_in(mathbutton38.$$.fragment, local);
-
     			transition_in(mathbutton39.$$.fragment, local);
-
     			transition_in(mathbutton40.$$.fragment, local);
-
     			transition_in(mathbutton41.$$.fragment, local);
-
     			transition_in(mathbutton42.$$.fragment, local);
-
     			transition_in(mathbutton43.$$.fragment, local);
-
     			transition_in(mathbutton44.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(mathbutton0.$$.fragment, local);
     			transition_out(mathbutton1.$$.fragment, local);
@@ -80030,193 +81018,174 @@ var app = (function () {
     			transition_out(mathbutton44.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(div);
-    			}
-
+    			if (detaching) detach_dev(div);
     			destroy_component(mathbutton0);
-
     			destroy_component(mathbutton1);
-
     			destroy_component(mathbutton2);
-
     			destroy_component(mathbutton3);
-
     			destroy_component(mathbutton4);
-
     			destroy_component(mathbutton5);
-
     			destroy_component(mathbutton6);
-
     			destroy_component(mathbutton7);
-
     			destroy_component(mathbutton8);
-
     			destroy_component(mathbutton9);
-
     			destroy_component(mathbutton10);
-
     			destroy_component(mathbutton11);
-
     			destroy_component(mathbutton12);
-
     			destroy_component(mathbutton13);
-
     			destroy_component(mathbutton14);
-
     			destroy_component(mathbutton15);
-
     			destroy_component(mathbutton16);
-
     			destroy_component(mathbutton17);
-
     			destroy_component(mathbutton18);
-
     			destroy_component(mathbutton19);
-
     			destroy_component(mathbutton20);
-
     			destroy_component(mathbutton21);
-
     			destroy_component(mathbutton22);
-
     			destroy_component(mathbutton23);
-
     			destroy_component(mathbutton24);
-
     			destroy_component(mathbutton25);
-
     			destroy_component(mathbutton26);
-
     			destroy_component(mathbutton27);
-
     			destroy_component(mathbutton28);
-
     			destroy_component(mathbutton29);
-
     			destroy_component(mathbutton30);
-
     			destroy_component(mathbutton31);
-
     			destroy_component(mathbutton32);
-
     			destroy_component(mathbutton33);
-
     			destroy_component(mathbutton34);
-
     			destroy_component(mathbutton35);
-
     			destroy_component(mathbutton36);
-
     			destroy_component(mathbutton37);
-
     			destroy_component(mathbutton38);
-
     			destroy_component(mathbutton39);
-
     			destroy_component(mathbutton40);
-
     			destroy_component(mathbutton41);
-
     			destroy_component(mathbutton42);
-
     			destroy_component(mathbutton43);
-
     			destroy_component(mathbutton44);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$5.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function handleClearClick() {
-        mathInputStore.clear();
+    	mathInputStore.clear();
     }
 
     function applyTransform(transformId) {
-        return () => {
-            mathInputStore.updateSelection(CALC_TRANSFORM[transformId]);
-        }
+    	return () => {
+    		mathInputStore.updateSelection(CALC_TRANSFORM[transformId]);
+    	};
     }
 
     function instance$5($$self, $$props, $$invalidate) {
-    	let $mathExpressionStore, $mathVariableStore;
+    	let $mathExpressionStore;
+    	let $mathVariableStore;
+    	validate_store(mathExpressionStore, "mathExpressionStore");
+    	component_subscribe($$self, mathExpressionStore, $$value => $$invalidate(2, $mathExpressionStore = $$value));
+    	validate_store(mathVariableStore, "mathVariableStore");
+    	component_subscribe($$self, mathVariableStore, $$value => $$invalidate(3, $mathVariableStore = $$value));
+    	let { className = "" } = $$props;
 
-    	validate_store(mathExpressionStore, 'mathExpressionStore');
-    	component_subscribe($$self, mathExpressionStore, $$value => { $mathExpressionStore = $$value; $$invalidate('$mathExpressionStore', $mathExpressionStore); });
-    	validate_store(mathVariableStore, 'mathVariableStore');
-    	component_subscribe($$self, mathVariableStore, $$value => { $mathVariableStore = $$value; $$invalidate('$mathVariableStore', $mathVariableStore); });
+    	function handleSolveClick() {
+    		globalChaosService.get().then(({ type, payload }) => {
+    			switch (type) {
+    				case ChaosType.INSULT:
+    					return insultStore.set(payload);
+    				case ChaosType.OPEN_LINK:
+    					return window.open(payload, "_blank");
+    				default:
+    					console.error("Unknown chaos type");
+    			}
+    		}).then(() => mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore)).then(() => {
+    			mathInputStore.clear();
+    		}).catch(e => console.error("Error creating chaos...", { e }));
+    	}
 
-    	
+    	const writable_props = ["className"];
 
-        let { className = '' } = $$props;
-
-        function handleSolveClick()  {
-            globalChaosService.get()
-                .then(({type, payload}) => {
-                    switch (type) {
-                        case ChaosType.INSULT:
-                            return insultStore.set(payload);
-                        case ChaosType.OPEN_LINK:
-                            return window.open(payload, '_blank');
-                        default:
-                            console.error('Unknown chaos type');
-                    }
-                })
-                .then(() => mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore))
-                .then(() => {mathInputStore.clear();})
-                .catch(e => console.error('Error creating chaos...', {e}));
-        }
-
-    	const writable_props = ['className'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console_1.warn(`<MathButtonPanel> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console_1.warn(`<MathButtonPanel> was created with unknown prop '${key}'`);
     	});
 
-    	function click_handler() {
-    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.X]);
-    	            mathVariableStore.add('x');
-    	        }
-
-    	function click_handler_1() {
-    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Y]);
-    	            mathVariableStore.add('y');
-    	        }
-
-    	function click_handler_2() {
-    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Z]);
-    	            mathVariableStore.add('z');
-    	        }
-
-    	function click_handler_3() {
-    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.MOD]);
-    	            mathVariableStore.add('a');
-    	        }
-
-    	function click_handler_4() {
-    	            mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.LOG_BASE_B]);
-    	            mathVariableStore.add('b');
-    	        }
-
-    	$$self.$set = $$props => {
-    		if ('className' in $$props) $$invalidate('className', className = $$props.className);
+    	const click_handler = () => {
+    		mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.X]);
+    		mathVariableStore.add("x");
     	};
 
-    	return {
+    	const click_handler_1 = () => {
+    		mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Y]);
+    		mathVariableStore.add("y");
+    	};
+
+    	const click_handler_2 = () => {
+    		mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.Z]);
+    		mathVariableStore.add("z");
+    	};
+
+    	const click_handler_3 = () => {
+    		mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.MOD]);
+    		mathVariableStore.add("a");
+    	};
+
+    	const click_handler_4 = () => {
+    		mathInputStore.updateSelection(CALC_TRANSFORM[CALC_OPERATION.LOG_BASE_B]);
+    		mathVariableStore.add("b");
+    	};
+
+    	$$self.$set = $$props => {
+    		if ("className" in $$props) $$invalidate(0, className = $$props.className);
+    	};
+
+    	$$self.$capture_state = () => {
+    		return {
+    			className,
+    			$mathExpressionStore,
+    			$mathVariableStore
+    		};
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("className" in $$props) $$invalidate(0, className = $$props.className);
+    		if ("$mathExpressionStore" in $$props) mathExpressionStore.set($mathExpressionStore = $$props.$mathExpressionStore);
+    		if ("$mathVariableStore" in $$props) mathVariableStore.set($mathVariableStore = $$props.$mathVariableStore);
+    	};
+
+    	return [
     		className,
     		handleSolveClick,
+    		$mathExpressionStore,
+    		$mathVariableStore,
     		click_handler,
     		click_handler_1,
     		click_handler_2,
     		click_handler_3,
     		click_handler_4
-    	};
+    	];
     }
 
     class MathButtonPanel extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$5, create_fragment$5, safe_not_equal, ["className"]);
+    		init(this, options, instance$5, create_fragment$5, safe_not_equal, { className: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "MathButtonPanel",
+    			options,
+    			id: create_fragment$5.name
+    		});
     	}
 
     	get className() {
@@ -80228,160 +81197,182 @@ var app = (function () {
     	}
     }
 
-    /* src/components/VariableList/VariableListItem/VariableListItem.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/VariableList/VariableListItem/VariableListItem.svelte generated by Svelte v3.16.4 */
     const file$4 = "src/components/VariableList/VariableListItem/VariableListItem.svelte";
 
     function create_fragment$6(ctx) {
-    	var li, label, t0, input, t1, button, current, dispose;
+    	let li;
+    	let label;
+    	let t0;
+    	let input;
+    	let t1;
+    	let button;
+    	let current;
+    	let dispose;
 
-    	var mathtexrenderer = new MathTexRenderer({
-    		props: { tex: ctx.tex },
-    		$$inline: true
-    	});
+    	const mathtexrenderer = new MathTexRenderer({
+    			props: { tex: /*tex*/ ctx[1] },
+    			$$inline: true
+    		});
 
-    	return {
+    	const block = {
     		c: function create() {
     			li = element("li");
     			label = element("label");
-    			mathtexrenderer.$$.fragment.c();
+    			create_component(mathtexrenderer.$$.fragment);
     			t0 = space();
     			input = element("input");
     			t1 = space();
     			button = element("button");
     			button.textContent = "x";
-    			attr(label, "for", ctx.inputId);
-    			attr(label, "class", "whitespace-no-wrap w-10 text-center bg-gray-100 pt-1");
+    			attr_dev(label, "for", /*inputId*/ ctx[2]);
+    			attr_dev(label, "class", "whitespace-no-wrap w-10 text-center bg-gray-100 pt-1");
     			add_location(label, file$4, 23, 4, 511);
-    			attr(input, "id", ctx.inputId);
-    			attr(input, "type", "text");
-    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-0 border-l");
+    			attr_dev(input, "id", /*inputId*/ ctx[2]);
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-0 border-l");
     			add_location(input, file$4, 26, 4, 646);
-    			attr(button, "type", "button");
-    			attr(button, "class", "px-2 py-1");
+    			attr_dev(button, "type", "button");
+    			attr_dev(button, "class", "px-2 py-1");
     			add_location(button, file$4, 27, 4, 780);
-    			attr(li, "class", "flex items-stretch max-w-full items-center border-b");
+    			attr_dev(li, "class", "flex items-stretch max-w-full items-center border-b");
     			add_location(li, file$4, 22, 0, 442);
 
     			dispose = [
-    				listen(input, "input", ctx.input_input_handler),
-    				listen(input, "change", ctx.handleChange),
-    				listen(button, "click", ctx.handleClearClick)
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[6]),
+    				listen_dev(input, "change", /*handleChange*/ ctx[3], false, false, false),
+    				listen_dev(button, "click", /*handleClearClick*/ ctx[4], false, false, false)
     			];
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, li, anchor);
-    			append(li, label);
+    			insert_dev(target, li, anchor);
+    			append_dev(li, label);
     			mount_component(mathtexrenderer, label, null);
-    			append(li, t0);
-    			append(li, input);
-
-    			input.value = ctx.value;
-
-    			append(li, t1);
-    			append(li, button);
+    			append_dev(li, t0);
+    			append_dev(li, input);
+    			set_input_value(input, /*value*/ ctx[0]);
+    			append_dev(li, t1);
+    			append_dev(li, button);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			var mathtexrenderer_changes = {};
-    			if (changed.tex) mathtexrenderer_changes.tex = ctx.tex;
+    		p: function update(ctx, dirty) {
+    			const mathtexrenderer_changes = {};
+    			if (dirty[0] & /*tex*/ 2) mathtexrenderer_changes.tex = /*tex*/ ctx[1];
     			mathtexrenderer.$set(mathtexrenderer_changes);
 
-    			if (!current || changed.inputId) {
-    				attr(label, "for", ctx.inputId);
+    			if (!current || dirty[0] & /*inputId*/ 4) {
+    				attr_dev(label, "for", /*inputId*/ ctx[2]);
     			}
 
-    			if (changed.value && (input.value !== ctx.value)) input.value = ctx.value;
+    			if (!current || dirty[0] & /*inputId*/ 4) {
+    				attr_dev(input, "id", /*inputId*/ ctx[2]);
+    			}
 
-    			if (!current || changed.inputId) {
-    				attr(input, "id", ctx.inputId);
+    			if (dirty[0] & /*value*/ 1 && input.value !== /*value*/ ctx[0]) {
+    				set_input_value(input, /*value*/ ctx[0]);
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(mathtexrenderer.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(mathtexrenderer.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(li);
-    			}
-
+    			if (detaching) detach_dev(li);
     			destroy_component(mathtexrenderer);
-
     			run_all(dispose);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$6.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$6($$self, $$props, $$invalidate) {
-    	
+    	let { name } = $$props;
+    	let { value = "" } = $$props;
 
-        let { name, value = '' } = $$props;
+    	function handleChange(evt) {
+    		mathVariableStore.set(name, evt.target.value);
+    	}
 
-        function handleChange(evt) {
-            mathVariableStore.set(name, evt.target.value);
-        }
+    	function handleClearClick(evt) {
+    		mathVariableStore.remove(name);
+    	}
 
-        function handleClearClick(evt) {
-            mathVariableStore.remove(name);
-        }
+    	const writable_props = ["name", "value"];
 
-    	const writable_props = ['name', 'value'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<VariableListItem> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<VariableListItem> was created with unknown prop '${key}'`);
     	});
 
     	function input_input_handler() {
     		value = this.value;
-    		$$invalidate('value', value);
+    		$$invalidate(0, value);
     	}
 
     	$$self.$set = $$props => {
-    		if ('name' in $$props) $$invalidate('name', name = $$props.name);
-    		if ('value' in $$props) $$invalidate('value', value = $$props.value);
+    		if ("name" in $$props) $$invalidate(5, name = $$props.name);
+    		if ("value" in $$props) $$invalidate(0, value = $$props.value);
     	};
 
-    	let tex, inputId;
-
-    	$$self.$$.update = ($$dirty = { name: 1 }) => {
-    		if ($$dirty.name) { $$invalidate('tex', tex = `${name}`); }
-    		if ($$dirty.name) { $$invalidate('inputId', inputId = `var_${name}`); }
+    	$$self.$capture_state = () => {
+    		return { name, value, tex, inputId };
     	};
 
-    	return {
-    		name,
-    		value,
-    		handleChange,
-    		handleClearClick,
-    		tex,
-    		inputId,
-    		input_input_handler
+    	$$self.$inject_state = $$props => {
+    		if ("name" in $$props) $$invalidate(5, name = $$props.name);
+    		if ("value" in $$props) $$invalidate(0, value = $$props.value);
+    		if ("tex" in $$props) $$invalidate(1, tex = $$props.tex);
+    		if ("inputId" in $$props) $$invalidate(2, inputId = $$props.inputId);
     	};
+
+    	let tex;
+    	let inputId;
+
+    	$$self.$$.update = () => {
+    		if ($$self.$$.dirty[0] & /*name*/ 32) {
+    			 $$invalidate(1, tex = `${name}`);
+    		}
+
+    		if ($$self.$$.dirty[0] & /*name*/ 32) {
+    			 $$invalidate(2, inputId = `var_${name}`);
+    		}
+    	};
+
+    	return [value, tex, inputId, handleChange, handleClearClick, name, input_input_handler];
     }
 
     class VariableListItem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$6, create_fragment$6, safe_not_equal, ["name", "value"]);
+    		init(this, options, instance$6, create_fragment$6, safe_not_equal, { name: 5, value: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "VariableListItem",
+    			options,
+    			id: create_fragment$6.name
+    		});
 
     		const { ctx } = this.$$;
-    		const props = options.props || {};
-    		if (ctx.name === undefined && !('name' in props)) {
+    		const props = options.props || ({});
+
+    		if (/*name*/ ctx[5] === undefined && !("name" in props)) {
     			console.warn("<VariableListItem> was created without expected prop 'name'");
     		}
     	}
@@ -80403,160 +81394,197 @@ var app = (function () {
     	}
     }
 
-    /* src/components/VariableList/VariableList.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/VariableList/VariableList.svelte generated by Svelte v3.16.4 */
     const file$5 = "src/components/VariableList/VariableList.svelte";
 
     function get_each_context(ctx, list, i) {
-    	const child_ctx = Object.create(ctx);
-    	child_ctx.name = list[i][0];
-    	child_ctx.value = list[i][1];
+    	const child_ctx = ctx.slice();
+    	child_ctx[1] = list[i][0];
+    	child_ctx[2] = list[i][1];
     	return child_ctx;
     }
 
     // (9:0) {#each Object.entries($mathVariableStore) as [name, value] (name)}
     function create_each_block(key_1, ctx) {
-    	var first, current;
+    	let first;
+    	let current;
 
-    	var variablelistitem = new VariableListItem({
-    		props: { name: ctx.name, value: ctx.value },
-    		$$inline: true
-    	});
+    	const variablelistitem = new VariableListItem({
+    			props: {
+    				name: /*name*/ ctx[1],
+    				value: /*value*/ ctx[2]
+    			},
+    			$$inline: true
+    		});
 
-    	return {
+    	const block = {
     		key: key_1,
-
     		first: null,
-
     		c: function create() {
     			first = empty();
-    			variablelistitem.$$.fragment.c();
+    			create_component(variablelistitem.$$.fragment);
     			this.first = first;
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, first, anchor);
+    			insert_dev(target, first, anchor);
     			mount_component(variablelistitem, target, anchor);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			var variablelistitem_changes = {};
-    			if (changed.$mathVariableStore) variablelistitem_changes.name = ctx.name;
-    			if (changed.$mathVariableStore) variablelistitem_changes.value = ctx.value;
+    		p: function update(ctx, dirty) {
+    			const variablelistitem_changes = {};
+    			if (dirty[0] & /*$mathVariableStore*/ 1) variablelistitem_changes.name = /*name*/ ctx[1];
+    			if (dirty[0] & /*$mathVariableStore*/ 1) variablelistitem_changes.value = /*value*/ ctx[2];
     			variablelistitem.$set(variablelistitem_changes);
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(variablelistitem.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(variablelistitem.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(first);
-    			}
-
+    			if (detaching) detach_dev(first);
     			destroy_component(variablelistitem, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block.name,
+    		type: "each",
+    		source: "(9:0) {#each Object.entries($mathVariableStore) as [name, value] (name)}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$7(ctx) {
-    	var ul, each_blocks = [], each_1_lookup = new Map(), current;
+    	let ul;
+    	let each_blocks = [];
+    	let each_1_lookup = new Map();
+    	let current;
+    	let each_value = Object.entries(/*$mathVariableStore*/ ctx[0]);
+    	const get_key = ctx => /*name*/ ctx[1];
 
-    	var each_value = Object.entries(ctx.$mathVariableStore);
-
-    	const get_key = ctx => ctx.name;
-
-    	for (var i = 0; i < each_value.length; i += 1) {
+    	for (let i = 0; i < each_value.length; i += 1) {
     		let child_ctx = get_each_context(ctx, each_value, i);
     		let key = get_key(child_ctx);
     		each_1_lookup.set(key, each_blocks[i] = create_each_block(key, child_ctx));
     	}
 
-    	return {
+    	const block = {
     		c: function create() {
     			ul = element("ul");
 
-    			for (i = 0; i < each_blocks.length; i += 1) each_blocks[i].c();
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].c();
+    			}
+
     			add_location(ul, file$5, 7, 0, 151);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, ul, anchor);
+    			insert_dev(target, ul, anchor);
 
-    			for (i = 0; i < each_blocks.length; i += 1) each_blocks[i].m(ul, null);
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].m(ul, null);
+    			}
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			const each_value = Object.entries(ctx.$mathVariableStore);
-
+    		p: function update(ctx, dirty) {
+    			const each_value = Object.entries(/*$mathVariableStore*/ ctx[0]);
     			group_outros();
-    			each_blocks = update_keyed_each(each_blocks, changed, get_key, 1, ctx, each_value, each_1_lookup, ul, outro_and_destroy_block, create_each_block, null, get_each_context);
+    			each_blocks = update_keyed_each(each_blocks, dirty, get_key, 1, ctx, each_value, each_1_lookup, ul, outro_and_destroy_block, create_each_block, null, get_each_context);
     			check_outros();
     		},
-
     		i: function intro(local) {
     			if (current) return;
-    			for (var i = 0; i < each_value.length; i += 1) transition_in(each_blocks[i]);
+
+    			for (let i = 0; i < each_value.length; i += 1) {
+    				transition_in(each_blocks[i]);
+    			}
 
     			current = true;
     		},
-
     		o: function outro(local) {
-    			for (i = 0; i < each_blocks.length; i += 1) transition_out(each_blocks[i]);
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				transition_out(each_blocks[i]);
+    			}
 
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(ul);
-    			}
+    			if (detaching) detach_dev(ul);
 
-    			for (i = 0; i < each_blocks.length; i += 1) each_blocks[i].d();
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				each_blocks[i].d();
+    			}
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$7.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$7($$self, $$props, $$invalidate) {
     	let $mathVariableStore;
+    	validate_store(mathVariableStore, "mathVariableStore");
+    	component_subscribe($$self, mathVariableStore, $$value => $$invalidate(0, $mathVariableStore = $$value));
 
-    	validate_store(mathVariableStore, 'mathVariableStore');
-    	component_subscribe($$self, mathVariableStore, $$value => { $mathVariableStore = $$value; $$invalidate('$mathVariableStore', $mathVariableStore); });
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
 
-    	return { $mathVariableStore };
+    	$$self.$inject_state = $$props => {
+    		if ("$mathVariableStore" in $$props) mathVariableStore.set($mathVariableStore = $$props.$mathVariableStore);
+    	};
+
+    	return [$mathVariableStore];
     }
 
     class VariableList extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$7, create_fragment$7, safe_not_equal, []);
+    		init(this, options, instance$7, create_fragment$7, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "VariableList",
+    			options,
+    			id: create_fragment$7.name
+    		});
     	}
     }
 
-    /* src/components/VariableAddForm/VariableAddForm.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/VariableAddForm/VariableAddForm.svelte generated by Svelte v3.16.4 */
     const file$6 = "src/components/VariableAddForm/VariableAddForm.svelte";
 
     function create_fragment$8(ctx) {
-    	var form, input, t0, button0, t1, button0_disabled_value, t2, button1, dispose;
+    	let form;
+    	let input;
+    	let t0;
+    	let button0;
+    	let t1;
+    	let button0_disabled_value;
+    	let t2;
+    	let button1;
+    	let dispose;
 
-    	return {
+    	const block = {
     		c: function create() {
     			form = element("form");
     			input = element("input");
@@ -80566,102 +81594,116 @@ var app = (function () {
     			t2 = space();
     			button1 = element("button");
     			button1.textContent = "clr";
-    			attr(input, "type", "text");
-    			attr(input, "maxlength", "1");
-    			attr(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-gray-400 focus:border-blue-400");
+    			attr_dev(input, "type", "text");
+    			attr_dev(input, "maxlength", "1");
+    			attr_dev(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-gray-400 focus:border-blue-400");
     			add_location(input, file$6, 21, 4, 443);
-    			attr(button0, "type", "submit");
-    			button0.disabled = button0_disabled_value = !ctx.value;
-    			attr(button0, "class", "px-2 mr-1 bg-gray-100 hover:bg-gray-300");
+    			attr_dev(button0, "type", "submit");
+    			button0.disabled = button0_disabled_value = !/*value*/ ctx[0];
+    			attr_dev(button0, "class", "px-2 mr-1 bg-gray-100 hover:bg-gray-300");
     			add_location(button0, file$6, 22, 4, 572);
-    			attr(button1, "type", "button");
-    			attr(button1, "class", "px-2 bg-red-200 hover:bg-red-300");
+    			attr_dev(button1, "type", "button");
+    			attr_dev(button1, "class", "px-2 bg-red-200 hover:bg-red-300");
     			add_location(button1, file$6, 23, 4, 675);
-    			attr(form, "class", "flex max-w-full py-2 border-b border-gray-400");
+    			attr_dev(form, "class", "flex max-w-full py-2 border-b border-gray-400");
     			add_location(form, file$6, 20, 0, 338);
 
     			dispose = [
-    				listen(input, "input", ctx.input_input_handler),
-    				listen(button1, "click", handleClearClick$1),
-    				listen(form, "submit", prevent_default(ctx.handleSubmit))
+    				listen_dev(input, "input", /*input_input_handler*/ ctx[2]),
+    				listen_dev(button1, "click", handleClearClick$1, false, false, false),
+    				listen_dev(form, "submit", prevent_default(/*handleSubmit*/ ctx[1]), false, true, false)
     			];
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, form, anchor);
-    			append(form, input);
-
-    			input.value = ctx.value;
-
-    			append(form, t0);
-    			append(form, button0);
-    			append(button0, t1);
-    			append(form, t2);
-    			append(form, button1);
+    			insert_dev(target, form, anchor);
+    			append_dev(form, input);
+    			set_input_value(input, /*value*/ ctx[0]);
+    			append_dev(form, t0);
+    			append_dev(form, button0);
+    			append_dev(button0, t1);
+    			append_dev(form, t2);
+    			append_dev(form, button1);
     		},
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*value*/ 1 && input.value !== /*value*/ ctx[0]) {
+    				set_input_value(input, /*value*/ ctx[0]);
+    			}
 
-    		p: function update(changed, ctx) {
-    			if (changed.value && (input.value !== ctx.value)) input.value = ctx.value;
-
-    			if ((changed.value) && button0_disabled_value !== (button0_disabled_value = !ctx.value)) {
-    				button0.disabled = button0_disabled_value;
+    			if (dirty[0] & /*value*/ 1 && button0_disabled_value !== (button0_disabled_value = !/*value*/ ctx[0])) {
+    				prop_dev(button0, "disabled", button0_disabled_value);
     			}
     		},
-
     		i: noop,
     		o: noop,
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(form);
-    			}
-
+    			if (detaching) detach_dev(form);
     			run_all(dispose);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$8.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function handleClearClick$1(evt) {
-        mathVariableStore.clearAll();
+    	mathVariableStore.clearAll();
     }
 
     function instance$8($$self, $$props, $$invalidate) {
-    	
+    	let { value = "" } = $$props;
 
-        let { value = '' } = $$props;
+    	function handleSubmit(evt) {
+    		mathVariableStore.add(value);
+    		$$invalidate(0, value = "");
+    	}
 
-        function handleSubmit(evt) {
+    	const writable_props = ["value"];
 
-            mathVariableStore.add(value);
-            $$invalidate('value', value = '');
-
-        }
-
-    	const writable_props = ['value'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<VariableAddForm> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<VariableAddForm> was created with unknown prop '${key}'`);
     	});
 
     	function input_input_handler() {
     		value = this.value;
-    		$$invalidate('value', value);
+    		$$invalidate(0, value);
     	}
 
     	$$self.$set = $$props => {
-    		if ('value' in $$props) $$invalidate('value', value = $$props.value);
+    		if ("value" in $$props) $$invalidate(0, value = $$props.value);
     	};
 
-    	return { value, handleSubmit, input_input_handler };
+    	$$self.$capture_state = () => {
+    		return { value };
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("value" in $$props) $$invalidate(0, value = $$props.value);
+    	};
+
+    	return [value, handleSubmit, input_input_handler];
     }
 
     class VariableAddForm extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$8, create_fragment$8, safe_not_equal, ["value"]);
+    		init(this, options, instance$8, create_fragment$8, safe_not_equal, { value: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "VariableAddForm",
+    			options,
+    			id: create_fragment$8.name
+    		});
     	}
 
     	get value() {
@@ -80673,93 +81715,102 @@ var app = (function () {
     	}
     }
 
-    /* src/components/InsultDisplay/InsultDisplay.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/InsultDisplay/InsultDisplay.svelte generated by Svelte v3.16.4 */
     const file$7 = "src/components/InsultDisplay/InsultDisplay.svelte";
 
     function create_fragment$9(ctx) {
-    	var span;
+    	let span;
 
-    	return {
+    	const block = {
     		c: function create() {
     			span = element("span");
     			add_location(span, file$7, 7, 0, 68);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, span, anchor);
-    			span.innerHTML = ctx.$insultStore;
+    			insert_dev(target, span, anchor);
+    			span.innerHTML = /*$insultStore*/ ctx[0];
     		},
-
-    		p: function update(changed, ctx) {
-    			if (changed.$insultStore) {
-    				span.innerHTML = ctx.$insultStore;
-    			}
-    		},
-
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*$insultStore*/ 1) span.innerHTML = /*$insultStore*/ ctx[0];		},
     		i: noop,
     		o: noop,
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(span);
-    			}
+    			if (detaching) detach_dev(span);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$9.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$9($$self, $$props, $$invalidate) {
     	let $insultStore;
+    	validate_store(insultStore, "insultStore");
+    	component_subscribe($$self, insultStore, $$value => $$invalidate(0, $insultStore = $$value));
 
-    	validate_store(insultStore, 'insultStore');
-    	component_subscribe($$self, insultStore, $$value => { $insultStore = $$value; $$invalidate('$insultStore', $insultStore); });
+    	$$self.$capture_state = () => {
+    		return {};
+    	};
 
-    	return { $insultStore };
+    	$$self.$inject_state = $$props => {
+    		if ("$insultStore" in $$props) insultStore.set($insultStore = $$props.$insultStore);
+    	};
+
+    	return [$insultStore];
     }
 
     class InsultDisplay extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$9, create_fragment$9, safe_not_equal, []);
+    		init(this, options, instance$9, create_fragment$9, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "InsultDisplay",
+    			options,
+    			id: create_fragment$9.name
+    		});
     	}
     }
 
-    /* src/components/SolutionDisplay/SolutionDisplay.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/SolutionDisplay/SolutionDisplay.svelte generated by Svelte v3.16.4 */
     const file$8 = "src/components/SolutionDisplay/SolutionDisplay.svelte";
+    const get_waiting_slot_changes$1 = dirty => ({});
+    const get_waiting_slot_context$1 = ctx => ({});
 
-    const get_waiting_slot_changes$1 = () => ({});
-    const get_waiting_slot_context$1 = () => ({});
+    const get_error_slot_changes$1 = dirty => ({
+    	error: dirty[0] & /*$mathSolutionStore*/ 2
+    });
 
-    const get_error_slot_changes$1 = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore });
-    const get_error_slot_context$1 = ({ $mathSolutionStore }) => ({ error: $mathSolutionStore.error });
+    const get_error_slot_context$1 = ctx => ({
+    	error: /*$mathSolutionStore*/ ctx[1].error
+    });
 
-    const get_post_slot_changes = () => ({});
-    const get_post_slot_context = () => ({});
-
-    const get_pre_slot_changes = () => ({});
-    const get_pre_slot_context = () => ({});
+    const get_post_slot_changes = dirty => ({});
+    const get_post_slot_context = ctx => ({});
+    const get_pre_slot_changes = dirty => ({});
+    const get_pre_slot_context = ctx => ({});
 
     // (32:0) {:else}
     function create_else_block$1(ctx) {
-    	var current;
+    	let current;
+    	const waiting_slot_template = /*$$slots*/ ctx[4].waiting;
+    	const waiting_slot = create_slot(waiting_slot_template, ctx, /*$$scope*/ ctx[3], get_waiting_slot_context$1);
 
-    	const waiting_slot_template = ctx.$$slots.waiting;
-    	const waiting_slot = create_slot(waiting_slot_template, ctx, get_waiting_slot_context$1);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if (waiting_slot) waiting_slot.c();
     		},
-
-    		l: function claim(nodes) {
-    			if (waiting_slot) waiting_slot.l(nodes);
-    		},
-
     		m: function mount(target, anchor) {
     			if (waiting_slot) {
     				waiting_slot.m(target, anchor);
@@ -80767,49 +81818,46 @@ var app = (function () {
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if (waiting_slot && waiting_slot.p && changed.$$scope) {
-    				waiting_slot.p(
-    					get_slot_changes(waiting_slot_template, ctx, changed, get_waiting_slot_changes$1),
-    					get_slot_context(waiting_slot_template, ctx, get_waiting_slot_context$1)
-    				);
+    		p: function update(ctx, dirty) {
+    			if (waiting_slot && waiting_slot.p && dirty[0] & /*$$scope*/ 8) {
+    				waiting_slot.p(get_slot_context(waiting_slot_template, ctx, /*$$scope*/ ctx[3], get_waiting_slot_context$1), get_slot_changes(waiting_slot_template, /*$$scope*/ ctx[3], dirty, get_waiting_slot_changes$1));
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(waiting_slot, local);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(waiting_slot, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if (waiting_slot) waiting_slot.d(detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_else_block$1.name,
+    		type: "else",
+    		source: "(32:0) {:else}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (30:54) 
     function create_if_block_1$1(ctx) {
-    	var current;
+    	let current;
+    	const error_slot_template = /*$$slots*/ ctx[4].error;
+    	const error_slot = create_slot(error_slot_template, ctx, /*$$scope*/ ctx[3], get_error_slot_context$1);
 
-    	const error_slot_template = ctx.$$slots.error;
-    	const error_slot = create_slot(error_slot_template, ctx, get_error_slot_context$1);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if (error_slot) error_slot.c();
     		},
-
-    		l: function claim(nodes) {
-    			if (error_slot) error_slot.l(nodes);
-    		},
-
     		m: function mount(target, anchor) {
     			if (error_slot) {
     				error_slot.m(target, anchor);
@@ -80817,72 +81865,69 @@ var app = (function () {
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if (error_slot && error_slot.p && (changed.$$scope || changed.$mathSolutionStore)) {
-    				error_slot.p(
-    					get_slot_changes(error_slot_template, ctx, changed, get_error_slot_changes$1),
-    					get_slot_context(error_slot_template, ctx, get_error_slot_context$1)
-    				);
+    		p: function update(ctx, dirty) {
+    			if (error_slot && error_slot.p && dirty[0] & /*$$scope, $mathSolutionStore*/ 10) {
+    				error_slot.p(get_slot_context(error_slot_template, ctx, /*$$scope*/ ctx[3], get_error_slot_context$1), get_slot_changes(error_slot_template, /*$$scope*/ ctx[3], dirty, get_error_slot_changes$1));
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(error_slot, local);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(error_slot, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if (error_slot) error_slot.d(detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block_1$1.name,
+    		type: "if",
+    		source: "(30:54) ",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (26:0) {#if typeof $mathSolutionStore.solution === 'number' || typeof $mathSolutionStore.solution === 'object'}
     function create_if_block$2(ctx) {
-    	var t0, span, t1_value = ctx.formatter(ctx.$mathSolutionStore.solution), t1, t2, current;
+    	let t0;
+    	let span;
+    	let t1_value = /*formatter*/ ctx[2](/*$mathSolutionStore*/ ctx[1].solution) + "";
+    	let t1;
+    	let t2;
+    	let current;
+    	const pre_slot_template = /*$$slots*/ ctx[4].pre;
+    	const pre_slot = create_slot(pre_slot_template, ctx, /*$$scope*/ ctx[3], get_pre_slot_context);
+    	const post_slot_template = /*$$slots*/ ctx[4].post;
+    	const post_slot = create_slot(post_slot_template, ctx, /*$$scope*/ ctx[3], get_post_slot_context);
 
-    	const pre_slot_template = ctx.$$slots.pre;
-    	const pre_slot = create_slot(pre_slot_template, ctx, get_pre_slot_context);
-
-    	const post_slot_template = ctx.$$slots.post;
-    	const post_slot = create_slot(post_slot_template, ctx, get_post_slot_context);
-
-    	return {
+    	const block = {
     		c: function create() {
     			if (pre_slot) pre_slot.c();
     			t0 = space();
     			span = element("span");
     			t1 = text(t1_value);
     			t2 = space();
-
     			if (post_slot) post_slot.c();
-
-    			attr(span, "class", ctx.classList);
+    			attr_dev(span, "class", /*classList*/ ctx[0]);
     			add_location(span, file$8, 27, 4, 675);
     		},
-
-    		l: function claim(nodes) {
-    			if (pre_slot) pre_slot.l(nodes);
-
-    			if (post_slot) post_slot.l(nodes);
-    		},
-
     		m: function mount(target, anchor) {
     			if (pre_slot) {
     				pre_slot.m(target, anchor);
     			}
 
-    			insert(target, t0, anchor);
-    			insert(target, span, anchor);
-    			append(span, t1);
-    			insert(target, t2, anchor);
+    			insert_dev(target, t0, anchor);
+    			insert_dev(target, span, anchor);
+    			append_dev(span, t1);
+    			insert_dev(target, t2, anchor);
 
     			if (post_slot) {
     				post_slot.m(target, anchor);
@@ -80890,184 +81935,184 @@ var app = (function () {
 
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			if (pre_slot && pre_slot.p && changed.$$scope) {
-    				pre_slot.p(
-    					get_slot_changes(pre_slot_template, ctx, changed, get_pre_slot_changes),
-    					get_slot_context(pre_slot_template, ctx, get_pre_slot_context)
-    				);
+    		p: function update(ctx, dirty) {
+    			if (pre_slot && pre_slot.p && dirty[0] & /*$$scope*/ 8) {
+    				pre_slot.p(get_slot_context(pre_slot_template, ctx, /*$$scope*/ ctx[3], get_pre_slot_context), get_slot_changes(pre_slot_template, /*$$scope*/ ctx[3], dirty, get_pre_slot_changes));
     			}
 
-    			if ((!current || changed.$mathSolutionStore) && t1_value !== (t1_value = ctx.formatter(ctx.$mathSolutionStore.solution))) {
-    				set_data(t1, t1_value);
+    			if ((!current || dirty[0] & /*$mathSolutionStore*/ 2) && t1_value !== (t1_value = /*formatter*/ ctx[2](/*$mathSolutionStore*/ ctx[1].solution) + "")) set_data_dev(t1, t1_value);
+
+    			if (!current || dirty[0] & /*classList*/ 1) {
+    				attr_dev(span, "class", /*classList*/ ctx[0]);
     			}
 
-    			if (!current || changed.classList) {
-    				attr(span, "class", ctx.classList);
-    			}
-
-    			if (post_slot && post_slot.p && changed.$$scope) {
-    				post_slot.p(
-    					get_slot_changes(post_slot_template, ctx, changed, get_post_slot_changes),
-    					get_slot_context(post_slot_template, ctx, get_post_slot_context)
-    				);
+    			if (post_slot && post_slot.p && dirty[0] & /*$$scope*/ 8) {
+    				post_slot.p(get_slot_context(post_slot_template, ctx, /*$$scope*/ ctx[3], get_post_slot_context), get_slot_changes(post_slot_template, /*$$scope*/ ctx[3], dirty, get_post_slot_changes));
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(pre_slot, local);
     			transition_in(post_slot, local);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(pre_slot, local);
     			transition_out(post_slot, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if (pre_slot) pre_slot.d(detaching);
-
-    			if (detaching) {
-    				detach(t0);
-    				detach(span);
-    				detach(t2);
-    			}
-
+    			if (detaching) detach_dev(t0);
+    			if (detaching) detach_dev(span);
+    			if (detaching) detach_dev(t2);
     			if (post_slot) post_slot.d(detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_if_block$2.name,
+    		type: "if",
+    		source: "(26:0) {#if typeof $mathSolutionStore.solution === 'number' || typeof $mathSolutionStore.solution === 'object'}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$a(ctx) {
-    	var current_block_type_index, if_block, if_block_anchor, current;
+    	let current_block_type_index;
+    	let if_block;
+    	let if_block_anchor;
+    	let current;
+    	const if_block_creators = [create_if_block$2, create_if_block_1$1, create_else_block$1];
+    	const if_blocks = [];
 
-    	var if_block_creators = [
-    		create_if_block$2,
-    		create_if_block_1$1,
-    		create_else_block$1
-    	];
-
-    	var if_blocks = [];
-
-    	function select_block_type(ctx) {
-    		if (typeof ctx.$mathSolutionStore.solution === 'number' || typeof ctx.$mathSolutionStore.solution === 'object') return 0;
-    		if (typeof mathSolutionStore.error === 'string') return 1;
+    	function select_block_type(ctx, dirty) {
+    		if (typeof /*$mathSolutionStore*/ ctx[1].solution === "number" || typeof /*$mathSolutionStore*/ ctx[1].solution === "object") return 0;
+    		if (typeof mathSolutionStore.error === "string") return 1;
     		return 2;
     	}
 
     	current_block_type_index = select_block_type(ctx);
     	if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
 
-    	return {
+    	const block = {
     		c: function create() {
     			if_block.c();
     			if_block_anchor = empty();
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
     			if_blocks[current_block_type_index].m(target, anchor);
-    			insert(target, if_block_anchor, anchor);
+    			insert_dev(target, if_block_anchor, anchor);
     			current = true;
     		},
-
-    		p: function update(changed, ctx) {
-    			var previous_block_index = current_block_type_index;
+    		p: function update(ctx, dirty) {
+    			let previous_block_index = current_block_type_index;
     			current_block_type_index = select_block_type(ctx);
+
     			if (current_block_type_index === previous_block_index) {
-    				if_blocks[current_block_type_index].p(changed, ctx);
+    				if_blocks[current_block_type_index].p(ctx, dirty);
     			} else {
     				group_outros();
+
     				transition_out(if_blocks[previous_block_index], 1, 1, () => {
     					if_blocks[previous_block_index] = null;
     				});
-    				check_outros();
 
+    				check_outros();
     				if_block = if_blocks[current_block_type_index];
+
     				if (!if_block) {
     					if_block = if_blocks[current_block_type_index] = if_block_creators[current_block_type_index](ctx);
     					if_block.c();
     				}
+
     				transition_in(if_block, 1);
     				if_block.m(if_block_anchor.parentNode, if_block_anchor);
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(if_block);
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(if_block);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			if_blocks[current_block_type_index].d(detaching);
-
-    			if (detaching) {
-    				detach(if_block_anchor);
-    			}
+    			if (detaching) detach_dev(if_block_anchor);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$a.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$a($$self, $$props, $$invalidate) {
     	let $mathSolutionStore;
+    	validate_store(mathSolutionStore, "mathSolutionStore");
+    	component_subscribe($$self, mathSolutionStore, $$value => $$invalidate(1, $mathSolutionStore = $$value));
+    	let { classList = "" } = $$props;
 
-    	validate_store(mathSolutionStore, 'mathSolutionStore');
-    	component_subscribe($$self, mathSolutionStore, $$value => { $mathSolutionStore = $$value; $$invalidate('$mathSolutionStore', $mathSolutionStore); });
+    	const formatter = solution => {
+    		if (typeof solution === "object") {
+    			const { re, im } = solution;
+    			return `${re ? re : ""}${re && im ? " + " : ""}${im ? `${im}i` : ""}`;
+    		} else {
+    			return solution;
+    		}
+    	};
 
-    	let { classList = '' } = $$props;
+    	const writable_props = ["classList"];
 
-           const formatter = solution => {
-            if (typeof solution === 'object') {
-
-                const {re, im} = solution;
-                // Formats      {re: 0, im: x} to 'xi',
-                //              {re: x, im: 0} to 'x',
-                //              {re: x, im: y} to 'x + yi'
-                return `${re ? re : ''}${re && im ? ' + ' : ''}${im ? `${im}i` : ''}`;
-
-            } else {
-                return solution;
-            }
-        };
-
-    	const writable_props = ['classList'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<SolutionDisplay> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<SolutionDisplay> was created with unknown prop '${key}'`);
     	});
 
     	let { $$slots = {}, $$scope } = $$props;
 
     	$$self.$set = $$props => {
-    		if ('classList' in $$props) $$invalidate('classList', classList = $$props.classList);
-    		if ('$$scope' in $$props) $$invalidate('$$scope', $$scope = $$props.$$scope);
+    		if ("classList" in $$props) $$invalidate(0, classList = $$props.classList);
+    		if ("$$scope" in $$props) $$invalidate(3, $$scope = $$props.$$scope);
     	};
 
-    	return {
-    		classList,
-    		formatter,
-    		$mathSolutionStore,
-    		$$slots,
-    		$$scope
+    	$$self.$capture_state = () => {
+    		return { classList, $mathSolutionStore };
     	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("classList" in $$props) $$invalidate(0, classList = $$props.classList);
+    		if ("$mathSolutionStore" in $$props) mathSolutionStore.set($mathSolutionStore = $$props.$mathSolutionStore);
+    	};
+
+    	return [classList, $mathSolutionStore, formatter, $$scope, $$slots];
     }
 
     class SolutionDisplay extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$a, create_fragment$a, safe_not_equal, ["classList"]);
+    		init(this, options, instance$a, create_fragment$a, safe_not_equal, { classList: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "SolutionDisplay",
+    			options,
+    			id: create_fragment$a.name
+    		});
     	}
 
     	get classList() {
@@ -81079,56 +82124,58 @@ var app = (function () {
     	}
     }
 
-    /* src/components/HistoryList/HistoryListItem/HistoryListItem.svelte generated by Svelte v3.7.1 */
+    /* src/components/HistoryList/HistoryListItem/HistoryListItem.svelte generated by Svelte v3.16.4 */
 
     const file$9 = "src/components/HistoryList/HistoryListItem/HistoryListItem.svelte";
 
     function create_fragment$b(ctx) {
-    	var li, t, dispose;
+    	let li;
+    	let t;
+    	let dispose;
 
-    	return {
+    	const block = {
     		c: function create() {
     			li = element("li");
-    			t = text(ctx.value);
-    			attr(li, "class", "history-list__item italic p-1 bg-gray-100 border-b border-gray-400");
+    			t = text(/*value*/ ctx[0]);
+    			attr_dev(li, "class", "history-list__item italic p-1 bg-gray-100 border-b border-gray-400");
     			add_location(li, file$9, 7, 0, 45);
-    			dispose = listen(li, "click", ctx.click_handler);
+    			dispose = listen_dev(li, "click", /*click_handler*/ ctx[1], false, false, false);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, li, anchor);
-    			append(li, t);
+    			insert_dev(target, li, anchor);
+    			append_dev(li, t);
     		},
-
-    		p: function update(changed, ctx) {
-    			if (changed.value) {
-    				set_data(t, ctx.value);
-    			}
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*value*/ 1) set_data_dev(t, /*value*/ ctx[0]);
     		},
-
     		i: noop,
     		o: noop,
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(li);
-    			}
-
+    			if (detaching) detach_dev(li);
     			dispose();
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$b.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function instance$b($$self, $$props, $$invalidate) {
     	let { value } = $$props;
+    	const writable_props = ["value"];
 
-    	const writable_props = ['value'];
     	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<HistoryListItem> was created with unknown prop '${key}'`);
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<HistoryListItem> was created with unknown prop '${key}'`);
     	});
 
     	function click_handler(event) {
@@ -81136,20 +82183,36 @@ var app = (function () {
     	}
 
     	$$self.$set = $$props => {
-    		if ('value' in $$props) $$invalidate('value', value = $$props.value);
+    		if ("value" in $$props) $$invalidate(0, value = $$props.value);
     	};
 
-    	return { value, click_handler };
+    	$$self.$capture_state = () => {
+    		return { value };
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("value" in $$props) $$invalidate(0, value = $$props.value);
+    	};
+
+    	return [value, click_handler];
     }
 
     class HistoryListItem extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$b, create_fragment$b, safe_not_equal, ["value"]);
+    		init(this, options, instance$b, create_fragment$b, safe_not_equal, { value: 0 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "HistoryListItem",
+    			options,
+    			id: create_fragment$b.name
+    		});
 
     		const { ctx } = this.$$;
-    		const props = options.props || {};
-    		if (ctx.value === undefined && !('value' in props)) {
+    		const props = options.props || ({});
+
+    		if (/*value*/ ctx[0] === undefined && !("value" in props)) {
     			console.warn("<HistoryListItem> was created without expected prop 'value'");
     		}
     	}
@@ -81163,73 +82226,76 @@ var app = (function () {
     	}
     }
 
-    /* src/components/HistoryList/HistoryList.svelte generated by Svelte v3.7.1 */
-
+    /* src/components/HistoryList/HistoryList.svelte generated by Svelte v3.16.4 */
     const file$a = "src/components/HistoryList/HistoryList.svelte";
 
     function get_each_context$1(ctx, list, i) {
-    	const child_ctx = Object.create(ctx);
-    	child_ctx.item = list[i];
+    	const child_ctx = ctx.slice();
+    	child_ctx[3] = list[i];
     	return child_ctx;
     }
 
     // (24:4) {#each visibleHistory as item}
     function create_each_block$1(ctx) {
-    	var current;
+    	let current;
 
-    	function click_handler() {
-    		return ctx.click_handler(ctx);
+    	function click_handler(...args) {
+    		return /*click_handler*/ ctx[2](/*item*/ ctx[3], ...args);
     	}
 
-    	var historylistitem = new HistoryListItem({
-    		props: { value: ctx.item.solution },
-    		$$inline: true
-    	});
+    	const historylistitem = new HistoryListItem({
+    			props: { value: /*item*/ ctx[3].solution },
+    			$$inline: true
+    		});
+
     	historylistitem.$on("click", click_handler);
 
-    	return {
+    	const block = {
     		c: function create() {
-    			historylistitem.$$.fragment.c();
+    			create_component(historylistitem.$$.fragment);
     		},
-
     		m: function mount(target, anchor) {
     			mount_component(historylistitem, target, anchor);
     			current = true;
     		},
-
-    		p: function update(changed, new_ctx) {
+    		p: function update(new_ctx, dirty) {
     			ctx = new_ctx;
-    			var historylistitem_changes = {};
-    			if (changed.visibleHistory) historylistitem_changes.value = ctx.item.solution;
+    			const historylistitem_changes = {};
+    			if (dirty[0] & /*visibleHistory*/ 1) historylistitem_changes.value = /*item*/ ctx[3].solution;
     			historylistitem.$set(historylistitem_changes);
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(historylistitem.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(historylistitem.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
     			destroy_component(historylistitem, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_each_block$1.name,
+    		type: "each",
+    		source: "(24:4) {#each visibleHistory as item}",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$c(ctx) {
-    	var ul, current;
+    	let ul;
+    	let current;
+    	let each_value = /*visibleHistory*/ ctx[0];
+    	let each_blocks = [];
 
-    	var each_value = ctx.visibleHistory;
-
-    	var each_blocks = [];
-
-    	for (var i = 0; i < each_value.length; i += 1) {
+    	for (let i = 0; i < each_value.length; i += 1) {
     		each_blocks[i] = create_each_block$1(get_each_context$1(ctx, each_value, i));
     	}
 
@@ -81237,40 +82303,39 @@ var app = (function () {
     		each_blocks[i] = null;
     	});
 
-    	return {
+    	const block = {
     		c: function create() {
     			ul = element("ul");
 
-    			for (var i = 0; i < each_blocks.length; i += 1) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].c();
     			}
-    			attr(ul, "class", "history-list");
+
+    			attr_dev(ul, "class", "history-list");
     			add_location(ul, file$a, 22, 0, 543);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, ul, anchor);
+    			insert_dev(target, ul, anchor);
 
-    			for (var i = 0; i < each_blocks.length; i += 1) {
+    			for (let i = 0; i < each_blocks.length; i += 1) {
     				each_blocks[i].m(ul, null);
     			}
 
     			current = true;
     		},
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*visibleHistory*/ 1) {
+    				each_value = /*visibleHistory*/ ctx[0];
+    				let i;
 
-    		p: function update(changed, ctx) {
-    			if (changed.visibleHistory) {
-    				each_value = ctx.visibleHistory;
-
-    				for (var i = 0; i < each_value.length; i += 1) {
+    				for (i = 0; i < each_value.length; i += 1) {
     					const child_ctx = get_each_context$1(ctx, each_value, i);
 
     					if (each_blocks[i]) {
-    						each_blocks[i].p(changed, child_ctx);
+    						each_blocks[i].p(child_ctx, dirty);
     						transition_in(each_blocks[i], 1);
     					} else {
     						each_blocks[i] = create_each_block$1(child_ctx);
@@ -81281,72 +82346,98 @@ var app = (function () {
     				}
 
     				group_outros();
-    				for (i = each_value.length; i < each_blocks.length; i += 1) out(i);
+
+    				for (i = each_value.length; i < each_blocks.length; i += 1) {
+    					out(i);
+    				}
+
     				check_outros();
     			}
     		},
-
     		i: function intro(local) {
     			if (current) return;
-    			for (var i = 0; i < each_value.length; i += 1) transition_in(each_blocks[i]);
+
+    			for (let i = 0; i < each_value.length; i += 1) {
+    				transition_in(each_blocks[i]);
+    			}
 
     			current = true;
     		},
-
     		o: function outro(local) {
     			each_blocks = each_blocks.filter(Boolean);
-    			for (let i = 0; i < each_blocks.length; i += 1) transition_out(each_blocks[i]);
+
+    			for (let i = 0; i < each_blocks.length; i += 1) {
+    				transition_out(each_blocks[i]);
+    			}
 
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(ul);
-    			}
-
+    			if (detaching) detach_dev(ul);
     			destroy_each(each_blocks, detaching);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$c.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function handleItemClick(item) {
-        mathInputStore.setValue(item.solution.toString());
+    	mathInputStore.setValue(item.solution.toString());
     }
 
     function instance$c($$self, $$props, $$invalidate) {
-    	
+    	let { showCount = 5 } = $$props;
+    	let visibleHistory = [];
 
-        let { showCount = 5 } = $$props;
-
-        let visibleHistory = [];
-
-        mathSolutionStore.subscribe(({history}) => {
-            const start = Math.max(history.length - showCount, 0);
-            const end = start + showCount;
-            $$invalidate('visibleHistory', visibleHistory = history.slice(start, end));
-        });
-
-    	const writable_props = ['showCount'];
-    	Object.keys($$props).forEach(key => {
-    		if (!writable_props.includes(key) && !key.startsWith('$$')) console.warn(`<HistoryList> was created with unknown prop '${key}'`);
+    	mathSolutionStore.subscribe(({ history }) => {
+    		const start = Math.max(history.length - showCount, 0);
+    		const end = start + showCount;
+    		$$invalidate(0, visibleHistory = history.slice(start, end));
     	});
 
-    	function click_handler({ item }) {
-    		return handleItemClick(item);
-    	}
+    	const writable_props = ["showCount"];
+
+    	Object.keys($$props).forEach(key => {
+    		if (!~writable_props.indexOf(key) && key.slice(0, 2) !== "$$") console.warn(`<HistoryList> was created with unknown prop '${key}'`);
+    	});
+
+    	const click_handler = item => handleItemClick(item);
 
     	$$self.$set = $$props => {
-    		if ('showCount' in $$props) $$invalidate('showCount', showCount = $$props.showCount);
+    		if ("showCount" in $$props) $$invalidate(1, showCount = $$props.showCount);
     	};
 
-    	return { showCount, visibleHistory, click_handler };
+    	$$self.$capture_state = () => {
+    		return { showCount, visibleHistory };
+    	};
+
+    	$$self.$inject_state = $$props => {
+    		if ("showCount" in $$props) $$invalidate(1, showCount = $$props.showCount);
+    		if ("visibleHistory" in $$props) $$invalidate(0, visibleHistory = $$props.visibleHistory);
+    	};
+
+    	return [visibleHistory, showCount, click_handler];
     }
 
     class HistoryList extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, instance$c, create_fragment$c, safe_not_equal, ["showCount"]);
+    		init(this, options, instance$c, create_fragment$c, safe_not_equal, { showCount: 1 });
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "HistoryList",
+    			options,
+    			id: create_fragment$c.name
+    		});
     	}
 
     	get showCount() {
@@ -81358,305 +82449,364 @@ var app = (function () {
     	}
     }
 
-    /* src/App.svelte generated by Svelte v3.7.1 */
-
+    /* src/App.svelte generated by Svelte v3.16.4 */
     const file$b = "src/App.svelte";
 
     // (23:5) <span slot="pre">
     function create_pre_slot(ctx) {
-    	var span;
+    	let span;
 
-    	return {
+    	const block = {
     		c: function create() {
     			span = element("span");
     			span.textContent = "Ans:";
-    			attr(span, "slot", "pre");
+    			attr_dev(span, "slot", "pre");
     			add_location(span, file$b, 22, 5, 907);
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, span, anchor);
+    			insert_dev(target, span, anchor);
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(span);
-    			}
+    			if (detaching) detach_dev(span);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_pre_slot.name,
+    		type: "slot",
+    		source: "(23:5) <span slot=\\\"pre\\\">",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (22:4) <SolutionDisplay classList="text-blue-500">
     function create_default_slot_1(ctx) {
-    	return {
-    		c: noop,
-    		m: noop,
-    		p: noop,
-    		d: noop
-    	};
+    	const block = { c: noop, m: noop, p: noop, d: noop };
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot_1.name,
+    		type: "slot",
+    		source: "(22:4) <SolutionDisplay classList=\\\"text-blue-500\\\">",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (32:6) <div slot="error">
     function create_error_slot(ctx) {
-    	var div, span, t0, t1_value = ctx.error, t1;
+    	let div;
+    	let span;
+    	let t0;
+    	let t1_value = /*error*/ ctx[0] + "";
+    	let t1;
 
-    	return {
+    	const block = {
     		c: function create() {
     			div = element("div");
     			span = element("span");
     			t0 = text("Whoa bud. ");
     			t1 = text(t1_value);
-    			attr(span, "class", "text-red-500");
+    			attr_dev(span, "class", "text-red-500");
     			add_location(span, file$b, 31, 24, 1157);
-    			attr(div, "slot", "error");
+    			attr_dev(div, "slot", "error");
     			add_location(div, file$b, 31, 6, 1139);
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, div, anchor);
-    			append(div, span);
-    			append(span, t0);
-    			append(span, t1);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, span);
+    			append_dev(span, t0);
+    			append_dev(span, t1);
     		},
-
-    		p: function update(changed, ctx) {
-    			if ((changed.error) && t1_value !== (t1_value = ctx.error)) {
-    				set_data(t1, t1_value);
-    			}
+    		p: function update(ctx, dirty) {
+    			if (dirty[0] & /*error*/ 1 && t1_value !== (t1_value = /*error*/ ctx[0] + "")) set_data_dev(t1, t1_value);
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(div);
-    			}
+    			if (detaching) detach_dev(div);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_error_slot.name,
+    		type: "slot",
+    		source: "(32:6) <div slot=\\\"error\\\">",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (33:6) <div slot="waiting" class="text-3xl">
     function create_waiting_slot(ctx) {
-    	var div, i;
+    	let div;
+    	let i;
 
-    	return {
+    	const block = {
     		c: function create() {
     			div = element("div");
     			i = element("i");
     			i.textContent = "Well...?";
     			add_location(i, file$b, 32, 43, 1258);
-    			attr(div, "slot", "waiting");
-    			attr(div, "class", "text-3xl");
+    			attr_dev(div, "slot", "waiting");
+    			attr_dev(div, "class", "text-3xl");
     			add_location(div, file$b, 32, 6, 1221);
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, div, anchor);
-    			append(div, i);
+    			insert_dev(target, div, anchor);
+    			append_dev(div, i);
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(div);
-    			}
+    			if (detaching) detach_dev(div);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_waiting_slot.name,
+    		type: "slot",
+    		source: "(33:6) <div slot=\\\"waiting\\\" class=\\\"text-3xl\\\">",
+    		ctx
+    	});
+
+    	return block;
     }
 
     // (31:5) <MathInputTexRender className="text-3xl" let:error>
     function create_default_slot$1(ctx) {
-    	var t;
+    	let t;
 
-    	return {
+    	const block = {
     		c: function create() {
     			t = space();
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, t, anchor);
+    			insert_dev(target, t, anchor);
     		},
-
     		p: noop,
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(t);
-    			}
+    			if (detaching) detach_dev(t);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_default_slot$1.name,
+    		type: "slot",
+    		source: "(31:5) <MathInputTexRender className=\\\"text-3xl\\\" let:error>",
+    		ctx
+    	});
+
+    	return block;
     }
 
     function create_fragment$d(ctx) {
-    	var main, div6, div1, t0, div0, t1, div5, div4, div2, t2, div3, t3, t4, div9, div7, h30, t6, t7, div8, h31, t9, t10, current;
+    	let main;
+    	let div6;
+    	let div1;
+    	let t0;
+    	let div0;
+    	let t1;
+    	let div5;
+    	let div4;
+    	let div2;
+    	let t2;
+    	let div3;
+    	let t3;
+    	let t4;
+    	let div10;
+    	let div9;
+    	let div7;
+    	let h30;
+    	let t6;
+    	let t7;
+    	let div8;
+    	let h31;
+    	let t9;
+    	let t10;
+    	let current;
+    	const insultdisplay = new InsultDisplay({ $$inline: true });
 
-    	var insultdisplay = new InsultDisplay({ $$inline: true });
+    	const solutiondisplay = new SolutionDisplay({
+    			props: {
+    				classList: "text-blue-500",
+    				$$slots: {
+    					default: [create_default_slot_1],
+    					pre: [create_pre_slot]
+    				},
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
 
-    	var solutiondisplay = new SolutionDisplay({
-    		props: {
-    		classList: "text-blue-500",
-    		$$slots: {
-    		default: [create_default_slot_1],
-    		pre: [create_pre_slot]
-    	},
-    		$$scope: { ctx }
-    	},
-    		$$inline: true
-    	});
+    	const mathinputtexrender = new MathInputTexRender({
+    			props: {
+    				className: "text-3xl",
+    				$$slots: {
+    					default: [
+    						create_default_slot$1,
+    						({ error }) => ({ 0: error }),
+    						({ error }) => [error ? 1 : 0]
+    					],
+    					waiting: [
+    						create_waiting_slot,
+    						({ error }) => ({ 0: error }),
+    						({ error }) => [error ? 1 : 0]
+    					],
+    					error: [
+    						create_error_slot,
+    						({ error }) => ({ 0: error }),
+    						({ error }) => [error ? 1 : 0]
+    					]
+    				},
+    				$$scope: { ctx }
+    			},
+    			$$inline: true
+    		});
 
-    	var mathinputtexrender = new MathInputTexRender({
-    		props: {
-    		className: "text-3xl",
-    		$$slots: {
-    		default: [create_default_slot$1, ({ error }) => ({ error })],
-    		waiting: [create_waiting_slot, ({ error }) => ({ error })],
-    		error: [create_error_slot, ({ error }) => ({ error })]
-    	},
-    		$$scope: { ctx }
-    	},
-    		$$inline: true
-    	});
+    	const mathinput = new MathInput({ $$inline: true });
 
-    	var mathinput = new MathInput({ $$inline: true });
+    	const mathbuttonpanel = new MathButtonPanel({
+    			props: { className: "flex-grow" },
+    			$$inline: true
+    		});
 
-    	var mathbuttonpanel = new MathButtonPanel({
-    		props: { className: "flex-grow" },
-    		$$inline: true
-    	});
+    	const historylist = new HistoryList({ $$inline: true });
+    	const variableaddform = new VariableAddForm({ $$inline: true });
+    	const variablelist = new VariableList({ $$inline: true });
 
-    	var historylist = new HistoryList({ $$inline: true });
-
-    	var variableaddform = new VariableAddForm({ $$inline: true });
-
-    	var variablelist = new VariableList({ $$inline: true });
-
-    	return {
+    	const block = {
     		c: function create() {
     			main = element("main");
     			div6 = element("div");
     			div1 = element("div");
-    			insultdisplay.$$.fragment.c();
+    			create_component(insultdisplay.$$.fragment);
     			t0 = space();
     			div0 = element("div");
-    			solutiondisplay.$$.fragment.c();
+    			create_component(solutiondisplay.$$.fragment);
     			t1 = space();
     			div5 = element("div");
     			div4 = element("div");
     			div2 = element("div");
-    			mathinputtexrender.$$.fragment.c();
+    			create_component(mathinputtexrender.$$.fragment);
     			t2 = space();
     			div3 = element("div");
-    			mathinput.$$.fragment.c();
+    			create_component(mathinput.$$.fragment);
     			t3 = space();
-    			mathbuttonpanel.$$.fragment.c();
+    			create_component(mathbuttonpanel.$$.fragment);
     			t4 = space();
+    			div10 = element("div");
     			div9 = element("div");
     			div7 = element("div");
     			h30 = element("h3");
     			h30.textContent = "History";
     			t6 = space();
-    			historylist.$$.fragment.c();
+    			create_component(historylist.$$.fragment);
     			t7 = space();
     			div8 = element("div");
     			h31 = element("h3");
     			h31.textContent = "Variables";
     			t9 = space();
-    			variableaddform.$$.fragment.c();
+    			create_component(variableaddform.$$.fragment);
     			t10 = space();
-    			variablelist.$$.fragment.c();
+    			create_component(variablelist.$$.fragment);
     			add_location(div0, file$b, 20, 3, 848);
-    			attr(div1, "class", "flex flex-col items-center justify-center text-5xl text-center h-64");
+    			attr_dev(div1, "class", "flex flex-col items-center justify-center text-5xl text-center h-64");
     			add_location(div1, file$b, 18, 2, 742);
-    			attr(div2, "class", "mb-2 text-center");
+    			attr_dev(div2, "class", "mb-2 text-center");
     			add_location(div2, file$b, 29, 4, 1045);
-    			attr(div3, "class", "mb-2");
+    			attr_dev(div3, "class", "mb-2 px-2");
     			add_location(div3, file$b, 35, 4, 1322);
-    			attr(div4, "class", "flex flex-col h-full");
+    			attr_dev(div4, "class", "flex flex-col h-full");
     			add_location(div4, file$b, 28, 3, 1006);
-    			attr(div5, "class", "flex-1");
+    			attr_dev(div5, "class", "flex-1");
     			add_location(div5, file$b, 27, 2, 982);
-    			attr(div6, "class", "flex flex-col justify-center w-2/3");
+    			attr_dev(div6, "class", "flex flex-col justify-center w-2/3");
     			add_location(div6, file$b, 16, 1, 690);
-    			attr(h30, "class", "font-bold text-center p-1 border-b border-gray-400");
-    			add_location(h30, file$b, 47, 3, 1526);
-    			attr(div7, "class", "h-64");
-    			add_location(div7, file$b, 46, 2, 1504);
-    			attr(h31, "class", "font-bold text-center p-1 border-b border-gray-400");
-    			add_location(h31, file$b, 52, 3, 1657);
-    			attr(div8, "class", "flex-1");
-    			add_location(div8, file$b, 51, 2, 1633);
-    			attr(div9, "class", "flex flex-col justify-center w-1/3 px-2");
-    			add_location(div9, file$b, 44, 1, 1447);
-    			attr(main, "class", "h-screen flex");
+    			attr_dev(h30, "class", "font-bold text-center p-1 border-b border-gray-400");
+    			add_location(h30, file$b, 47, 4, 1573);
+    			attr_dev(div7, "class", "h-64");
+    			add_location(div7, file$b, 46, 3, 1550);
+    			attr_dev(h31, "class", "font-bold text-center p-1 border-b border-gray-400");
+    			add_location(h31, file$b, 52, 4, 1708);
+    			attr_dev(div8, "class", "flex-1");
+    			add_location(div8, file$b, 51, 3, 1683);
+    			attr_dev(div9, "class", "flex flex-col justify-center px-2");
+    			add_location(div9, file$b, 45, 2, 1499);
+    			attr_dev(div10, "class", "w-1/3 border-l border-gray-400");
+    			add_location(div10, file$b, 44, 1, 1452);
+    			attr_dev(main, "class", "h-screen flex");
     			add_location(main, file$b, 14, 0, 659);
     		},
-
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
     		},
-
     		m: function mount(target, anchor) {
-    			insert(target, main, anchor);
-    			append(main, div6);
-    			append(div6, div1);
+    			insert_dev(target, main, anchor);
+    			append_dev(main, div6);
+    			append_dev(div6, div1);
     			mount_component(insultdisplay, div1, null);
-    			append(div1, t0);
-    			append(div1, div0);
+    			append_dev(div1, t0);
+    			append_dev(div1, div0);
     			mount_component(solutiondisplay, div0, null);
-    			append(div6, t1);
-    			append(div6, div5);
-    			append(div5, div4);
-    			append(div4, div2);
+    			append_dev(div6, t1);
+    			append_dev(div6, div5);
+    			append_dev(div5, div4);
+    			append_dev(div4, div2);
     			mount_component(mathinputtexrender, div2, null);
-    			append(div4, t2);
-    			append(div4, div3);
+    			append_dev(div4, t2);
+    			append_dev(div4, div3);
     			mount_component(mathinput, div3, null);
-    			append(div4, t3);
+    			append_dev(div4, t3);
     			mount_component(mathbuttonpanel, div4, null);
-    			append(main, t4);
-    			append(main, div9);
-    			append(div9, div7);
-    			append(div7, h30);
-    			append(div7, t6);
+    			append_dev(main, t4);
+    			append_dev(main, div10);
+    			append_dev(div10, div9);
+    			append_dev(div9, div7);
+    			append_dev(div7, h30);
+    			append_dev(div7, t6);
     			mount_component(historylist, div7, null);
-    			append(div9, t7);
-    			append(div9, div8);
-    			append(div8, h31);
-    			append(div8, t9);
+    			append_dev(div9, t7);
+    			append_dev(div9, div8);
+    			append_dev(div8, h31);
+    			append_dev(div8, t9);
     			mount_component(variableaddform, div8, null);
-    			append(div8, t10);
+    			append_dev(div8, t10);
     			mount_component(variablelist, div8, null);
     			current = true;
     		},
+    		p: function update(ctx, dirty) {
+    			const solutiondisplay_changes = {};
 
-    		p: function update(changed, ctx) {
-    			var solutiondisplay_changes = {};
-    			if (changed.$$scope) solutiondisplay_changes.$$scope = { changed, ctx };
+    			if (dirty[0] & /*$$scope*/ 2) {
+    				solutiondisplay_changes.$$scope = { dirty, ctx };
+    			}
+
     			solutiondisplay.$set(solutiondisplay_changes);
+    			const mathinputtexrender_changes = {};
 
-    			var mathinputtexrender_changes = {};
-    			if (changed.$$scope) mathinputtexrender_changes.$$scope = { changed, ctx };
+    			if (dirty[0] & /*$$scope, error*/ 3) {
+    				mathinputtexrender_changes.$$scope = { dirty, ctx };
+    			}
+
     			mathinputtexrender.$set(mathinputtexrender_changes);
     		},
-
     		i: function intro(local) {
     			if (current) return;
     			transition_in(insultdisplay.$$.fragment, local);
-
     			transition_in(solutiondisplay.$$.fragment, local);
-
     			transition_in(mathinputtexrender.$$.fragment, local);
-
     			transition_in(mathinput.$$.fragment, local);
-
     			transition_in(mathbuttonpanel.$$.fragment, local);
-
     			transition_in(historylist.$$.fragment, local);
-
     			transition_in(variableaddform.$$.fragment, local);
-
     			transition_in(variablelist.$$.fragment, local);
-
     			current = true;
     		},
-
     		o: function outro(local) {
     			transition_out(insultdisplay.$$.fragment, local);
     			transition_out(solutiondisplay.$$.fragment, local);
@@ -81668,35 +82818,41 @@ var app = (function () {
     			transition_out(variablelist.$$.fragment, local);
     			current = false;
     		},
-
     		d: function destroy(detaching) {
-    			if (detaching) {
-    				detach(main);
-    			}
-
+    			if (detaching) detach_dev(main);
     			destroy_component(insultdisplay);
-
     			destroy_component(solutiondisplay);
-
     			destroy_component(mathinputtexrender);
-
     			destroy_component(mathinput);
-
     			destroy_component(mathbuttonpanel);
-
     			destroy_component(historylist);
-
     			destroy_component(variableaddform);
-
     			destroy_component(variablelist);
     		}
     	};
+
+    	dispatch_dev("SvelteRegisterBlock", {
+    		block,
+    		id: create_fragment$d.name,
+    		type: "component",
+    		source: "",
+    		ctx
+    	});
+
+    	return block;
     }
 
     class App extends SvelteComponentDev {
     	constructor(options) {
     		super(options);
-    		init(this, options, null, create_fragment$d, safe_not_equal, []);
+    		init(this, options, null, create_fragment$d, safe_not_equal, {});
+
+    		dispatch_dev("SvelteRegisterComponent", {
+    			component: this,
+    			tagName: "App",
+    			options,
+    			id: create_fragment$d.name
+    		});
     	}
     }
 

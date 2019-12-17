@@ -33,7 +33,7 @@
 						<div slot="waiting" class="text-3xl"><i>Well...?</i></div>
 					</MathInputTexRender>
 				</div>
-				<div class="mb-2">
+				<div class="mb-2 px-2">
 					<MathInput />
 				</div>
 				<MathButtonPanel className="flex-grow" />
@@ -42,19 +42,19 @@
 
 	</div>
 
-	<div class="flex flex-col justify-center w-1/3 px-2">
+	<div class="w-1/3 border-l border-gray-400">
+		<div class="flex flex-col justify-center px-2">
+			<div class="h-64">
+				<h3 class="font-bold text-center p-1 border-b border-gray-400">History</h3>
+				<HistoryList />
+			</div>
 
-		<div class="h-64">
-			<h3 class="font-bold text-center p-1 border-b border-gray-400">History</h3>
-			<HistoryList />
+			<div class="flex-1">
+				<h3 class="font-bold text-center p-1 border-b border-gray-400">Variables</h3>
+				<VariableAddForm />
+				<VariableList />
+			</div>
 		</div>
-
-		<div class="flex-1">
-			<h3 class="font-bold text-center p-1 border-b border-gray-400">Variables</h3>
-			<VariableAddForm />
-			<VariableList />
-		</div>
-
 	</div>
 
 </main>
