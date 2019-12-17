@@ -80818,7 +80818,7 @@ var app = (function () {
     			t43 = space();
     			create_component(mathbutton44.$$.fragment);
     			attr_dev(div, "class", div_class_value = "calculator-panel " + /*className*/ ctx[0]);
-    			add_location(div, file$3, 43, 0, 1403);
+    			add_location(div, file$3, 42, 0, 1353);
     		},
     		l: function claim(nodes) {
     			throw new Error("options.hydrate only works if the component was compiled with the `hydratable: true` option");
@@ -81108,9 +81108,7 @@ var app = (function () {
     				default:
     					console.error("Unknown chaos type");
     			}
-    		}).then(() => mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore)).then(() => {
-    			mathInputStore.clear();
-    		}).catch(e => console.error("Error creating chaos...", { e }));
+    		}).then(() => mathSolutionStore.solve($mathExpressionStore.parsed, $mathVariableStore)).catch(e => console.error("Error creating chaos...", { e }));
     	}
 
     	const writable_props = ["className"];
@@ -81590,23 +81588,25 @@ var app = (function () {
     			input = element("input");
     			t0 = space();
     			button0 = element("button");
-    			t1 = text("+");
+    			t1 = text("Add");
     			t2 = space();
     			button1 = element("button");
-    			button1.textContent = "clr";
+    			button1.textContent = "Clear All";
     			attr_dev(input, "type", "text");
     			attr_dev(input, "maxlength", "1");
-    			attr_dev(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-gray-400 focus:border-blue-400");
-    			add_location(input, file$6, 21, 4, 443);
+    			attr_dev(input, "pattern", "[a-z]");
+    			attr_dev(input, "class", "flex-grow min-w-0 px-2 py-1 mr-1 border-gray-400 focus:border-blue-400 invalid:border-red-200");
+    			attr_dev(input, "placeholder", "Enter a single character (e.g. x)");
+    			add_location(input, file$6, 26, 4, 619);
     			attr_dev(button0, "type", "submit");
     			button0.disabled = button0_disabled_value = !/*value*/ ctx[0];
     			attr_dev(button0, "class", "px-2 mr-1 bg-gray-100 hover:bg-gray-300");
-    			add_location(button0, file$6, 22, 4, 572);
+    			add_location(button0, file$6, 28, 4, 840);
     			attr_dev(button1, "type", "button");
     			attr_dev(button1, "class", "px-2 bg-red-200 hover:bg-red-300");
-    			add_location(button1, file$6, 23, 4, 675);
+    			add_location(button1, file$6, 29, 4, 945);
     			attr_dev(form, "class", "flex max-w-full py-2 border-b border-gray-400");
-    			add_location(form, file$6, 20, 0, 338);
+    			add_location(form, file$6, 25, 0, 514);
 
     			dispose = [
     				listen_dev(input, "input", /*input_input_handler*/ ctx[2]),
@@ -81663,8 +81663,12 @@ var app = (function () {
     	let { value = "" } = $$props;
 
     	function handleSubmit(evt) {
-    		mathVariableStore.add(value);
-    		$$invalidate(0, value = "");
+    		if ((/[a-z]/i).test(value)) {
+    			mathVariableStore.add(value);
+    			$$invalidate(0, value = "");
+    		} else {
+    			window.alert(`${value} is not a valid varaible name. Should be a single character (a-z).`);
+    		}
     	}
 
     	const writable_props = ["value"];
