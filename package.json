@@ -14,7 +14,7 @@
   "dependencies": {
     "autoprefixer": "^9.7.3",
     "katex": "^0.11.1",
-    "mathjs": "^6.2.5",
+    "mathjs": "^7.5.1",
     "postcss-import": "^12.0.1",
     "rollup-plugin-postcss": "^2.0.3",
     "sirv-cli": "^0.4.5",
